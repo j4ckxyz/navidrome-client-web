@@ -146,6 +146,11 @@ export function ThemeEditor() {
   const isCustom = () => settings.theme.preset === "custom";
   const mode = () => settings.theme.customizationMode;
 
+  // Apple Music ships a light and a dark variant; the grid shows a single card
+  // and a Light/Dark switch toggles between the two preset color sets.
+  const isApplePreset = () =>
+    settings.theme.preset === "apple-music" || settings.theme.preset === "apple-music-dark";
+
   // --- Theme sharing ---
   const [shareName, setShareName] = createSignal("My theme");
   const [qrDataUrl, setQrDataUrl] = createSignal("");
@@ -222,12 +227,15 @@ export function ThemeEditor() {
                 class="preset-card"
                 role="button"
                 tabindex="0"
-                classList={{ "preset-card-active": settings.theme.preset === p.id }}
-                onClick={() => applyPreset(p.id)}
+                classList={{
+                  "preset-card-active":
+                    p.id === "apple-music" ? isApplePreset() : settings.theme.preset === p.id,
+                }}
+                onClick={() => applyPreset(p.id === "apple-music" && isApplePreset() ? settings.theme.preset : p.id)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    applyPreset(p.id);
+                    applyPreset(p.id === "apple-music" && isApplePreset() ? settings.theme.preset : p.id);
                   }
                 }}
               >
@@ -238,7 +246,7 @@ export function ThemeEditor() {
                   <span style={{ background: PRESET_COLORS[p.id].accent }} />
                 </div>
                 <span class="preset-label">{p.label}</span>
-                <Show when={settings.theme.preset === p.id}>
+                <Show when={p.id === "apple-music" ? isApplePreset() : settings.theme.preset === p.id}>
                   <span class="preset-check"><Icon name="check" size={14} /></span>
                 </Show>
               </div>
@@ -281,6 +289,26 @@ export function ThemeEditor() {
             )}
           </For>
         </div>
+
+        <Show when={isApplePreset()}>
+          <div class="apple-variant-row">
+            <span>Appearance</span>
+            <div class="segmented">
+              <button
+                classList={{ "segmented-on": settings.theme.preset === "apple-music" }}
+                onClick={() => applyPreset("apple-music")}
+              >
+                Light
+              </button>
+              <button
+                classList={{ "segmented-on": settings.theme.preset === "apple-music-dark" }}
+                onClick={() => applyPreset("apple-music-dark")}
+              >
+                Dark
+              </button>
+            </div>
+          </div>
+        </Show>
 
         <Show when={settings.theme.preset === "custom"}>
           <form onSubmit={savePreset} class="save-preset-row">

@@ -1,0 +1,165 @@
+.eq-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.eq-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #e06a6a;
+  margin: 4px 0 12px;
+}
+.eq-cors-hint {
+  margin-bottom: 8px;
+}
+.eq-cors-hint code {
+  font-size: 12px;
+  background: var(--content-bg);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+}
+
+/* The fieldset is a layout-only wrapper; reset its native styling. */
+.eq-body {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.eq-body[disabled] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.eq-controls-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.eq-preset-select {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.eq-preset-select .settings-select {
+  min-width: 200px;
+}
+.eq-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+/* The band graph: a row of vertical sliders. */
+.eq-graph {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 18px 12px 8px;
+  background: var(--content-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+}
+.eq-band {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 38px;
+}
+.eq-divider {
+  width: 1px;
+  background: var(--border);
+  margin: 0 6px;
+  align-self: stretch;
+}
+
+.eq-slider {
+  /* Vertical orientation that works across modern browsers. */
+  writing-mode: vertical-lr;
+  direction: rtl;
+  -webkit-appearance: slider-vertical; /* legacy Safari/Chromium fallback */
+  appearance: slider-vertical;
+  width: 6px;
+  height: 130px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.eq-band-value {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  min-height: 14px;
+}
+.eq-band-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--content-text);
+}
+.eq-band-preamp .eq-band-label {
+  color: var(--accent);
+}
+
+.eq-save-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.eq-save-row .input {
+  flex: 1;
+}
+.eq-save-row .btn {
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.eq-user-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.eq-user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--content-bg);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--content-text);
+  transition: border-color 0.14s var(--ease-out), background 0.14s var(--ease-out);
+}
+.eq-user-chip:hover {
+  border-color: var(--accent);
+}
+.eq-user-chip-active {
+  border-color: var(--accent);
+  background: var(--surface-active);
+}
+.eq-user-chip-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  border-radius: 50%;
+  padding: 1px;
+}
+.eq-user-chip-del:hover {
+  color: #e06a6a;
+}

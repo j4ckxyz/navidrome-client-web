@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "server": "bun run server/index.ts",
     "typecheck": "tsc --noEmit",
-    "update": "bash scripts/update.sh"
+    "update": "bun run scripts/update.ts"
   },
   "dependencies": {
     "@kobalte/core": "^0.13.7",

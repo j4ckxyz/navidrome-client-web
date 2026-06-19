@@ -6,6 +6,7 @@ import { createSignal, Show } from "solid-js";
 import { settings, updateSettings, resetSettings, exportSettings, importSettings } from "~/settings/store";
 import { player } from "~/player/store";
 import { ThemeEditor } from "~/features/settings/ThemeEditor";
+import { EqualizerEditor } from "~/features/settings/EqualizerEditor";
 import { ShortcutsEditor } from "~/features/settings/ShortcutsEditor";
 import { Row, Toggle, SelectField, RangeField } from "~/features/settings/controls";
 import { DebugPanel } from "~/features/settings/DebugPanel";
@@ -207,6 +208,8 @@ export default function Settings() {
                 />
               </Row>
             </div>
+
+            <EqualizerEditor />
           </Show>
 
           {/* Advanced */}
@@ -307,6 +310,7 @@ export default function Settings() {
                     if (confirm("Reset all settings to defaults? This won't log you out.")) {
                       resetSettings();
                       player.syncCrossfade();
+                      player.syncEqualizer();
                     }
                   }}
                 >
