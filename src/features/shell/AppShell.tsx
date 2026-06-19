@@ -7,6 +7,8 @@ import { useLocation, useNavigate } from "@solidjs/router";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { NowPlayingBar } from "~/features/player/NowPlayingBar";
+import { FullScreenPlayer } from "~/features/player/FullScreenPlayer";
+import { isFullScreen } from "~/features/player/fullscreen";
 import { QueuePanel } from "~/features/player/QueuePanel";
 import { LyricsPanel } from "~/features/player/LyricsPanel";
 import { AddToPlaylistDialog } from "~/features/playlists/addToPlaylist";
@@ -84,6 +86,9 @@ export function AppShell(props: { children?: JSX.Element }) {
         </div>
       </div>
       <NowPlayingBar />
+      <Show when={isFullScreen()}>
+        <FullScreenPlayer />
+      </Show>
       <AddToPlaylistDialog />
       <ShortcutsHelpDialog />
       <Show when={showUpload()}>

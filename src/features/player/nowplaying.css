@@ -19,6 +19,40 @@
 .np-placeholder {
   font-size: 13px;
 }
+
+/* Clicking the artwork opens the full-screen player (Apple Music style). */
+.np-cover-btn {
+  position: relative;
+  flex: none;
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.16s var(--ease-out);
+}
+.np-cover-btn:hover {
+  transform: scale(1.04);
+}
+.np-cover-btn:active {
+  transform: scale(0.98);
+}
+.np-cover-expand {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity 0.16s var(--ease-out);
+}
+.np-cover-btn:hover .np-cover-expand,
+.np-cover-btn:focus-visible .np-cover-expand {
+  opacity: 1;
+}
+/* Chevron points up — "pull up to expand". */
+.np-cover-expand svg {
+  transform: rotate(-90deg);
+}
 .np-meta {
   display: flex;
   flex-direction: column;
