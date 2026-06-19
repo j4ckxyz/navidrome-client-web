@@ -65,12 +65,24 @@ export function AppShell(props: { children?: JSX.Element }) {
         <TopBar />
         <div class="app-scroll">{props.children}</div>
       </main>
-      <Show when={sidePanel()}>
-        {/* Queue takes precedence if both are toggled; lyrics shows otherwise. */}
-        <Show when={settings.layout.showQueuePanel} fallback={<LyricsPanel />}>
+      <div class="side-panel-wrapper">
+        <div
+          class="side-panel-item"
+          classList={{
+            "side-panel-item-active": settings.layout.showQueuePanel,
+          }}
+        >
           <QueuePanel />
-        </Show>
-      </Show>
+        </div>
+        <div
+          class="side-panel-item"
+          classList={{
+            "side-panel-item-active": !settings.layout.showQueuePanel && settings.layout.showLyricsPanel,
+          }}
+        >
+          <LyricsPanel />
+        </div>
+      </div>
       <NowPlayingBar />
       <AddToPlaylistDialog />
       <ShortcutsHelpDialog />

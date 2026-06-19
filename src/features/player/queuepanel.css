@@ -1,8 +1,6 @@
 .side-panel {
-  grid-area: side;
-  width: var(--side-panel-width);
-  background: var(--content-bg);
-  border-left: 1px solid var(--border);
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;

@@ -1,20 +1,51 @@
 .app-shell {
   --sidebar-w: var(--sidebar-width);
+  --side-panel-w: 0px;
   position: relative;
   height: 100%;
   display: grid;
   grid-template-areas:
-    "sidebar content"
-    "nowplaying nowplaying";
-  grid-template-columns: var(--sidebar-w) 1fr;
+    "sidebar content side"
+    "nowplaying nowplaying nowplaying";
+  grid-template-columns: var(--sidebar-w) 1fr var(--side-panel-w);
   grid-template-rows: 1fr auto;
   transition: grid-template-columns 0.34s var(--ease-out);
 }
 .app-shell-side {
-  grid-template-areas:
-    "sidebar content side"
-    "nowplaying nowplaying nowplaying";
-  grid-template-columns: var(--sidebar-w) 1fr auto;
+  --side-panel-w: var(--side-panel-width);
+}
+
+.side-panel-wrapper {
+  grid-area: side;
+  width: var(--side-panel-w);
+  overflow: hidden;
+  height: 100%;
+  background: var(--content-bg);
+  position: relative;
+  border-left: 1px solid transparent;
+  transition: width 0.34s var(--ease-out), border-color 0.34s var(--ease-out);
+}
+.app-shell-side .side-panel-wrapper {
+  border-left-color: var(--border);
+}
+
+.side-panel-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--side-panel-width);
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(12px);
+  transition: opacity 0.22s var(--ease-out), transform 0.22s var(--ease-out);
+  display: flex;
+  flex-direction: column;
+}
+.side-panel-item-active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
 }
 
 /* Collapsed: the sidebar column animates to zero width. The sidebar element

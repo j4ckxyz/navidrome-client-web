@@ -26,6 +26,7 @@
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-muted);
+  transition: opacity 0.16s var(--ease-out);
 }
 .track-play-overlay {
   position: absolute;
@@ -36,6 +37,7 @@
   opacity: 0;
   color: var(--content-text);
   z-index: 1;
+  transition: opacity 0.16s var(--ease-out);
 }
 .track-row:hover .track-num {
   opacity: 0;
@@ -121,6 +123,7 @@
   height: 32px;
   opacity: 0;
   color: var(--text-muted);
+  transition: opacity 0.16s var(--ease-out), color 0.16s var(--ease-out), transform 0.16s var(--ease-out);
 }
 .track-row:hover .track-star {
   opacity: 1;
@@ -141,6 +144,7 @@
   width: 32px;
   height: 32px;
   opacity: 0;
+  transition: opacity 0.16s var(--ease-out), color 0.16s var(--ease-out), transform 0.16s var(--ease-out);
 }
 .track-row:hover .track-more {
   opacity: 1;

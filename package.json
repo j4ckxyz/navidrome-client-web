@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "server": "bun run server/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "update": "bash scripts/update.sh"
   },
   "dependencies": {
     "@kobalte/core": "^0.13.7",

@@ -1,7 +1,7 @@
 // Cover art with graceful fallback. Album art is the primary visual element in
 // this app, so the placeholder is deliberately calm rather than a broken image.
 
-import { createMemo, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, Show } from "solid-js";
 import { client } from "~/auth/session";
 import { Icon } from "./Icon";
 import "./coverart.css";
@@ -19,6 +19,13 @@ export function CoverArt(props: {
     return c.coverArtUrl(props.coverArt, props.size ? props.size * 2 : 600);
   });
 
+  const [loaded, setLoaded] = createSignal(false);
+
+  createEffect(() => {
+    url();
+    setLoaded(false);
+  });
+
   return (
     <div
       class={`cover ${props.rounded ? "cover-round" : ""} ${props.class ?? ""}`}
@@ -32,7 +39,15 @@ export function CoverArt(props: {
           </div>
         }
       >
-        <img src={url()} alt={props.alt ?? ""} loading="lazy" draggable={false} />
+        <img
+          src={url()}
+          alt={props.alt ?? ""}
+          loading="lazy"
+          draggable={false}
+          onLoad={() => setLoaded(true)}
+          class="cover-img"
+          classList={{ "cover-loaded": loaded() }}
+        />
       </Show>
     </div>
   );

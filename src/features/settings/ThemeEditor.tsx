@@ -22,6 +22,8 @@ const PRESETS: { id: Exclude<ThemePreset, "custom">; label: string }[] = [
   { id: "midnight", label: "Midnight" },
   { id: "warm", label: "Warm" },
   { id: "mono", label: "Mono" },
+  { id: "apple-music", label: "Apple Music" },
+  { id: "spotify", label: "Spotify" },
 ];
 
 function ColorField(props: { label: string; value: string; onChange: (hex: string) => void }) {
@@ -80,7 +82,7 @@ export function ThemeEditor() {
       updateSettings((s) => {
         s.theme.preset = stdId;
         s.theme.colors = { ...PRESET_COLORS[stdId] };
-        s.theme.base = stdId === "light" ? "light" : "dark";
+        s.theme.base = stdId === "light" || stdId === "apple-music" ? "light" : "dark";
       });
     }
   }

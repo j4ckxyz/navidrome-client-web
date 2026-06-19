@@ -5,6 +5,7 @@ import { createQuery } from "@tanstack/solid-query";
 import { createEffect, createMemo, For, Show } from "solid-js";
 import { client } from "~/auth/session";
 import { player } from "~/player/store";
+import { settings } from "~/settings/store";
 import { qk } from "~/lib/query";
 import { Icon } from "~/ui/Icon";
 import "./lyricspanel.css";
@@ -15,7 +16,11 @@ export function LyricsPanel() {
   const lyrics = createQuery(() => ({
     queryKey: qk.lyrics(song()?.id ?? ""),
     queryFn: () => client()!.getLyrics(song()!.id),
-    enabled: !!client() && !!song(),
+    enabled:
+      !!client() &&
+      !!song() &&
+      settings.layout.showLyricsPanel &&
+      !settings.layout.showQueuePanel,
   }));
 
   const best = createMemo(() => {

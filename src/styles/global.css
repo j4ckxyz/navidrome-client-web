@@ -172,10 +172,15 @@ img {
   height: 38px;
   border-radius: 50%;
   color: var(--content-text);
-  transition: background 0.16s var(--ease-out), color 0.16s var(--ease-out);
+  transition: background 0.16s var(--ease-out), color 0.16s var(--ease-out),
+    transform 0.16s var(--ease-out);
 }
 .icon-btn:hover {
   background: var(--surface-hover);
+  transform: scale(1.06);
+}
+.icon-btn:active {
+  transform: scale(0.92);
 }
 .icon-btn.active {
   color: var(--accent);

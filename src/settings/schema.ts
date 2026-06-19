@@ -4,7 +4,7 @@
 
 export const SETTINGS_VERSION = 1 as const;
 
-export type ThemePreset = "dark" | "light" | "midnight" | "warm" | "mono" | "custom";
+export type ThemePreset = "dark" | "light" | "midnight" | "warm" | "mono" | "apple-music" | "spotify" | "custom";
 export type CustomizationMode = "simple" | "advanced";
 
 // The nine deliberate, documented themeable regions. Dividers/borders are
@@ -204,6 +204,28 @@ export const PRESET_COLORS: Record<Exclude<ThemePreset, "custom">, ThemeColors> 
     textMuted: "#8a8a8a",
     surface: "#242424",
     nowPlayingBg: "#0f0f0f",
+  },
+  "apple-music": {
+    accent: "#fa233b",
+    accentText: "#ffffff",
+    sidebarBg: "#f5f5f7",
+    sidebarText: "#1d1d1f",
+    contentBg: "#ffffff",
+    contentText: "#1d1d1f",
+    textMuted: "#86868b",
+    surface: "#f5f5f7",
+    nowPlayingBg: "#ffffff",
+  },
+  spotify: {
+    accent: "#1ed760",
+    accentText: "#121212",
+    sidebarBg: "#000000",
+    sidebarText: "#b3b3b3",
+    contentBg: "#121212",
+    contentText: "#ffffff",
+    textMuted: "#a7a7a7",
+    surface: "#181818",
+    nowPlayingBg: "#181818",
   },
 };
 

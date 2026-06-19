@@ -14,6 +14,11 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.28s var(--ease-out);
+}
+.cover img.cover-loaded {
+  opacity: 1;
 }
 .cover-fallback {
   width: 100%;
