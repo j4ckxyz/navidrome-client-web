@@ -109,6 +109,12 @@ function createPlayer() {
   // Tracks whether we've submitted a scrobble for the current track yet.
   const [scrobbled, setScrobbled] = createSignal(false);
 
+  // Position (seconds) to resume the restored track at, applied on first play
+  // after a refresh. Cleared once consumed.
+  let resumeAt = 0;
+  // Throttle position persistence during playback.
+  let lastPersist = 0;
+
   // Sleep timer: null = off, "end" = stop when the current track finishes, or a
   // number = epoch-ms deadline at which playback pauses.
   const [sleepMode, setSleepMode] = createSignal<null | "end" | number>(null);
@@ -125,6 +131,11 @@ function createPlayer() {
         setState("currentTime", time);
       }
       maybeScrobble(time, duration > 0 ? duration : state.duration);
+      // Persist position periodically so a refresh resumes where you were.
+      if (settings.playback.resumeQueueOnLaunch && performance.now() - lastPersist > 4000) {
+        lastPersist = performance.now();
+        persistQueue();
+      }
     },
     onEnded: () => advance(true),
     onPlayingChange: (playing) => setState("isPlaying", playing),
@@ -173,14 +184,17 @@ function createPlayer() {
     };
   }
 
-  async function playSongAt(index: number): Promise<void> {
+  async function playSongAt(index: number, startAt = 0): Promise<void> {
     const song = state.queue[index];
     if (!song) return;
     // Seed time + length from metadata immediately so the UI is correct for the
     // new track before (and even if) the element reports its own duration.
-    setState({ index, currentTime: 0, duration: song.duration ?? 0 });
+    setState({ index, currentTime: startAt, duration: song.duration ?? 0 });
     setScrobbled(false);
     await engine.play(deckTrack(song));
+    // Resume from a saved position (e.g. after a page refresh). Best-effort:
+    // depends on the element knowing its duration, which direct files do.
+    if (startAt > 0) engine.seek(startAt);
     notifyNowPlaying(song);
     prefetchNext();
   }
@@ -303,7 +317,10 @@ function createPlayer() {
       engine.pause();
     } else {
       if (!engine.hasActiveTrack()) {
-        void playSongAt(state.index);
+        // First play after a restore: resume at the saved position.
+        const at = resumeAt;
+        resumeAt = 0;
+        void playSongAt(state.index, at);
       } else {
         engine.resume();
       }
@@ -490,7 +507,7 @@ function createPlayer() {
     try {
       localStorage.setItem(
         QUEUE_KEY,
-        JSON.stringify({ queue: state.queue, index: state.index }),
+        JSON.stringify({ queue: state.queue, index: state.index, time: state.currentTime }),
       );
     } catch {
       // ignore quota errors
@@ -502,11 +519,14 @@ function createPlayer() {
     try {
       const raw = localStorage.getItem(QUEUE_KEY);
       if (!raw) return;
-      const data = JSON.parse(raw) as { queue: Song[]; index: number };
+      const data = JSON.parse(raw) as { queue: Song[]; index: number; time?: number };
       if (Array.isArray(data.queue) && data.queue.length > 0) {
-        // Load without auto-playing (autoplay needs a gesture anyway).
+        // Load without auto-playing (autoplay needs a gesture anyway). Remember
+        // the saved position so the first play resumes where you left off.
         const index = Math.max(0, Math.min(data.index, data.queue.length - 1));
-        setState({ queue: data.queue, index, duration: data.queue[index]?.duration ?? 0, currentTime: 0 });
+        const time = Math.max(0, data.time ?? 0);
+        resumeAt = time;
+        setState({ queue: data.queue, index, duration: data.queue[index]?.duration ?? 0, currentTime: time });
       }
     } catch {
       // ignore

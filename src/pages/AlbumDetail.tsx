@@ -3,19 +3,23 @@
 
 import { createQuery } from "@tanstack/solid-query";
 import { A, useParams } from "@solidjs/router";
-import { createMemo, For, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { client } from "~/auth/session";
 import type { Song } from "~/api/types";
 import { qk } from "~/lib/query";
 import { player } from "~/player/store";
 import { isStarred, toggleStar } from "~/features/stars";
 import { openAddToPlaylist } from "~/features/playlists/addToPlaylist";
+import { updateSettings } from "~/settings/store";
+import { derivePalette } from "~/theme/colors";
+import { extractColors, distinctColours } from "~/lib/colorExtract";
 import { CoverArt } from "~/ui/CoverArt";
 import { Icon } from "~/ui/Icon";
 import { MenuButton } from "~/ui/Menu";
 import { SongList } from "~/ui/SongList";
 import { AsyncState } from "~/ui/AsyncState";
 import { formatCount, formatLongDuration } from "~/lib/format";
+import "./album.css";
 
 export default function AlbumDetail() {
   const params = useParams<{ id: string }>();
@@ -40,8 +44,47 @@ export default function AlbumDetail() {
   });
   const multiDisc = createMemo(() => discs().length > 1);
 
+  // Build a soft gradient backdrop from the cover's dominant colours. Best-effort:
+  // requires a CORS-clean cover (same-origin/proxy, or a server that sends CORS).
+  const [gradient, setGradient] = createSignal<string | null>(null);
+  createEffect(() => {
+    const art = q.data?.coverArt;
+    const c = client();
+    setGradient(null);
+    if (!art || !c) return;
+    extractColors(c.coverArtUrl(art, 256))
+      .then(({ palette }) => {
+        const cols = distinctColours(palette, 3);
+        if (cols.length >= 2) setGradient(`linear-gradient(135deg, ${cols.join(", ")})`);
+        else if (cols.length === 1) setGradient(`linear-gradient(135deg, ${cols[0]}, ${cols[0]})`);
+      })
+      .catch(() => setGradient(null));
+  });
+
+  // Generate an accessible custom theme from the cover. derivePalette keeps
+  // contrast readable; the user picks the light/dark base.
+  async function themeFromCover(base: "dark" | "light") {
+    const art = q.data?.coverArt;
+    const c = client();
+    if (!art || !c) return;
+    try {
+      const { accent } = await extractColors(c.coverArtUrl(art, 256));
+      updateSettings((s) => {
+        s.theme.preset = "custom";
+        s.theme.customizationMode = "simple";
+        s.theme.base = base;
+        s.theme.colors = derivePalette(base, accent);
+      });
+    } catch {
+      // extraction failed (e.g. cover not CORS-clean) — leave the theme as-is
+    }
+  }
+
   return (
-    <div class="page">
+    <div class="page album-page">
+      <Show when={gradient()}>
+        <div class="album-backdrop" style={{ "background-image": gradient()! }} aria-hidden="true" />
+      </Show>
       <AsyncState loading={q.isLoading} error={q.error}>
         <Show when={q.data}>
           {(album) => (
@@ -92,6 +135,8 @@ export default function AlbumDetail() {
                     { label: "Play next", icon: "next", onSelect: () => player.playNext(songs()) },
                     { label: "Add to queue", icon: "queue", onSelect: () => player.addToQueue(songs()) },
                     { label: "Add to playlist…", icon: "plus", onSelect: () => openAddToPlaylist(songs().map((s) => s.id)), separatorBefore: true },
+                    { label: "Theme from cover · Dark", icon: "settings", onSelect: () => themeFromCover("dark"), separatorBefore: true },
+                    { label: "Theme from cover · Light", icon: "settings", onSelect: () => themeFromCover("light") },
                   ]}
                 />
               </div>

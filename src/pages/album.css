@@ -1,0 +1,26 @@
+/* Album page: a soft, blurred gradient backdrop derived from the cover's
+   dominant colours sits behind the header, fading out toward the track list. */
+.album-page {
+  position: relative;
+}
+.album-backdrop {
+  position: absolute;
+  top: -22px;
+  left: -26px;
+  right: -26px;
+  height: 340px;
+  z-index: 0;
+  opacity: 0.5;
+  filter: blur(46px) saturate(1.25);
+  pointer-events: none;
+  background-size: cover;
+  background-position: center;
+  /* Fade out toward the content so it reads as ambience, not a band of colour. */
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.85), transparent);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.85), transparent);
+}
+/* Keep all real content above the backdrop. */
+.album-page > :not(.album-backdrop) {
+  position: relative;
+  z-index: 1;
+}

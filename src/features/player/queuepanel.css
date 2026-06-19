@@ -93,3 +93,31 @@
 .queue-item:hover .queue-remove {
   opacity: 1;
 }
+
+/* Autoplay suggestions */
+.queue-suggest-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 16px 8px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.queue-suggest {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  opacity: 0.62;
+  transition: opacity 0.14s var(--ease-out), background 0.12s var(--ease-out);
+}
+.queue-suggest:hover {
+  opacity: 1;
+  background: var(--surface-hover);
+}
+.queue-suggest-add {
+  opacity: 1;
+  color: var(--accent);
+}
