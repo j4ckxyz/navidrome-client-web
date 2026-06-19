@@ -1,0 +1,97 @@
+.side-panel {
+  grid-area: side;
+  width: var(--side-panel-width);
+  background: var(--content-bg);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.side-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 18px 12px;
+  flex: none;
+}
+.side-panel-title {
+  font-size: 16px;
+  font-weight: 650;
+}
+.queue-clear {
+  font-size: 12px;
+  padding: 6px 11px;
+}
+
+.queue-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 10px 16px;
+}
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: var(--radius);
+  cursor: grab;
+  transition: background 0.12s var(--ease-out);
+}
+.queue-item:hover {
+  background: var(--surface-hover);
+}
+.queue-item-current {
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+}
+.queue-item-over {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.queue-grip {
+  color: var(--text-muted);
+  opacity: 0;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.queue-item:hover .queue-grip {
+  opacity: 1;
+}
+.queue-cover {
+  border-radius: var(--radius-sm);
+}
+.queue-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+.queue-title {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.queue-title.accent-text {
+  color: var(--accent);
+  font-weight: 600;
+}
+.queue-artist {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.queue-dur {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.queue-remove {
+  width: 28px;
+  height: 28px;
+  opacity: 0;
+  flex: none;
+}
+.queue-item:hover .queue-remove {
+  opacity: 1;
+}

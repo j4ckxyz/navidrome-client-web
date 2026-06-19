@@ -1,0 +1,41 @@
+.debug-panel {
+  margin-top: 14px;
+  padding: 16px;
+  background: var(--content-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.debug-endpoints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.debug-ep {
+  font-size: 12px;
+  padding: 6px 12px;
+  font-family: ui-monospace, monospace;
+}
+.debug-url {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+.debug-url code {
+  font-family: ui-monospace, monospace;
+}
+.debug-output {
+  margin-top: 12px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 14px;
+  background: var(--now-playing-bg);
+  border-radius: var(--radius-sm);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+}

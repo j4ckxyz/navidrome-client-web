@@ -1,0 +1,28 @@
+.app-shell {
+  height: 100%;
+  display: grid;
+  grid-template-areas:
+    "sidebar content"
+    "nowplaying nowplaying";
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 1fr auto;
+}
+.app-shell-side {
+  grid-template-areas:
+    "sidebar content side"
+    "nowplaying nowplaying nowplaying";
+  grid-template-columns: auto 1fr auto;
+}
+
+.app-content {
+  grid-area: content;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--content-bg);
+}
+.app-scroll {
+  flex: 1;
+  overflow-y: auto;
+}

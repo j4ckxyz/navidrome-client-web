@@ -1,0 +1,28 @@
+{
+  "name": "navidrome-client-web",
+  "version": "0.1.0",
+  "description": "A modern, desktop-first web client for Navidrome",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kobalte/core": "^0.13.7",
+    "@solidjs/router": "^0.15.3",
+    "@tanstack/solid-query": "^5.66.0",
+    "@tanstack/solid-virtual": "^3.13.0",
+    "jsqr": "^1.4.0",
+    "qrcode": "^1.5.4",
+    "solid-js": "^1.9.4"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.5",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.11",
+    "vite-plugin-solid": "^2.11.0"
+  }
+}

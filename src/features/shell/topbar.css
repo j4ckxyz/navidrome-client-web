@@ -1,0 +1,49 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 32px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in oklab, var(--content-bg) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid transparent;
+}
+.topbar-nav {
+  display: flex;
+  gap: 4px;
+}
+.flip {
+  transform: rotate(180deg);
+}
+
+.topbar-search {
+  position: relative;
+  flex: 1;
+  max-width: 440px;
+}
+.topbar-search-icon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.topbar-search-input {
+  width: 100%;
+  padding: 10px 14px 10px 40px;
+  background: var(--surface);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  transition: border-color 0.16s var(--ease-out), background 0.16s var(--ease-out);
+}
+.topbar-search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--content-bg);
+}
+.topbar-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}

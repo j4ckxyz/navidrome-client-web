@@ -1,0 +1,93 @@
+.card {
+  display: block;
+  border-radius: var(--radius-lg);
+  padding: 10px;
+  transition: background 0.16s var(--ease-out);
+}
+.card:hover {
+  background: var(--surface);
+}
+
+.card-art {
+  position: relative;
+  margin-bottom: 12px;
+}
+.card-art .cover {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+
+.card-play {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translateY(8px) scale(0.9);
+  transition: opacity 0.18s var(--ease-out), transform 0.18s var(--ease-out);
+  padding-left: 3px;
+}
+.card:hover .card-play {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+.card-play:hover {
+  background: var(--accent-hover);
+}
+
+.card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.card-meta-center {
+  align-items: center;
+  text-align: center;
+}
+.card-title {
+  font-size: 14px;
+  font-weight: 550;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-sub {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Responsive auto-fill grid; cover size nudged by the layout density setting. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-min, 168px), 1fr));
+  gap: 8px;
+}
+:root[data-cover="small"] {
+  --card-min: 140px;
+}
+:root[data-cover="large"] {
+  --card-min: 210px;
+}
+
+/* Horizontal scrolling row for home carousels. */
+.carousel {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(var(--card-min, 168px), 1fr);
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x proximity;
+}
+.carousel .card {
+  scroll-snap-align: start;
+}

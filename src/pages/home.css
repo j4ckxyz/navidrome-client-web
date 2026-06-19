@@ -1,0 +1,22 @@
+.home-greeting {
+  margin-bottom: 28px;
+}
+.home-section {
+  margin-bottom: 34px;
+}
+.home-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.home-seeall {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.home-seeall:hover {
+  color: var(--content-text);
+}

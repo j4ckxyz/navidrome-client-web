@@ -1,0 +1,43 @@
+.genre-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+.genre-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  min-height: 96px;
+  justify-content: flex-end;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.16s var(--ease-out), background 0.16s var(--ease-out);
+}
+.genre-tile::after {
+  content: "";
+  position: absolute;
+  top: -30%;
+  right: -10%;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--accent) 30%, transparent);
+  opacity: 0.5;
+}
+.genre-tile:hover {
+  transform: translateY(-3px);
+  background: var(--surface-hover);
+}
+.genre-name {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  z-index: 1;
+}
+.genre-count {
+  font-size: 12px;
+  z-index: 1;
+}

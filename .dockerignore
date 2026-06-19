@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.gitignore
+*.log
+.DS_Store
+.vite
+README.md
+PRODUCT.md
+DESIGN.md

@@ -1,0 +1,40 @@
+.shortcut-list {
+  display: flex;
+  flex-direction: column;
+}
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.shortcut-label {
+  flex: 1;
+  font-size: 14px;
+}
+.shortcut-conflict {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: #e06a6a;
+}
+.shortcut-key {
+  min-width: 130px;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--content-bg);
+  border: 1px solid var(--border);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  text-align: center;
+  transition: border-color 0.14s var(--ease-out);
+}
+.shortcut-key:hover {
+  border-color: var(--text-muted);
+}
+.shortcut-key-recording {
+  border-color: var(--accent);
+  color: var(--accent);
+}

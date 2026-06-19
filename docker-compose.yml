@@ -1,0 +1,24 @@
+# Navidrome web client — a static, browser-only frontend.
+#
+# There is NO backend service here and NO bind mounts, so this works identically
+# on Windows (Docker Desktop), macOS, and Linux. The Navidrome server URL is
+# entered in the app at login, not baked into the image, so the same image works
+# against any server.
+#
+# Usage:
+#   docker compose up -d
+#   then open http://localhost:8680 and log in with your Navidrome details.
+
+services:
+  navidrome-web:
+    # Build locally from the Dockerfile. To use a prebuilt image instead,
+    # comment out `build` and set `image:` to your published tag.
+    build: .
+    image: navidrome-client-web:latest
+    container_name: navidrome-web
+    ports:
+      # host:container — change the left side to use a different host port.
+      - "8680:80"
+    restart: unless-stopped
+    # No volumes needed: the app is fully static and stores its own settings in
+    # the browser's localStorage, not on disk.

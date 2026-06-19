@@ -1,0 +1,112 @@
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 200;
+  animation: fade-in 0.15s var(--ease-out);
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+.dialog-positioner {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 201;
+  padding: 24px;
+}
+.dialog-content {
+  width: 100%;
+  max-width: 460px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow);
+  animation: menu-in 0.16s var(--ease-out);
+}
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.dialog-title {
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.atp-new {
+  display: flex;
+  gap: 10px;
+}
+.atp-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.atp-divider::before,
+.atp-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.atp-list {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.atp-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 12px;
+  border-radius: var(--radius);
+  text-align: left;
+  transition: background 0.14s var(--ease-out);
+}
+.atp-item:hover {
+  background: var(--surface-hover);
+}
+.atp-item-name {
+  flex: 1;
+  font-size: 14px;
+}
+.atp-empty {
+  padding: 16px;
+  text-align: center;
+}
+
+.toast {
+  position: fixed;
+  bottom: calc(var(--nowplaying-height) + 20px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent);
+  color: var(--on-accent);
+  padding: 11px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  z-index: 300;
+  animation: toast-in 0.2s var(--ease-out);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+}

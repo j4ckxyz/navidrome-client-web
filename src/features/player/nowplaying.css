@@ -1,0 +1,120 @@
+.np-bar {
+  grid-area: nowplaying;
+  height: var(--nowplaying-height);
+  background: var(--now-playing-bg);
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr minmax(420px, 2fr) 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 0 18px;
+}
+
+.np-left {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+}
+.np-placeholder {
+  font-size: 13px;
+}
+.np-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+}
+.np-title {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-title:hover {
+  text-decoration: underline;
+}
+.np-artist {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-artist:hover {
+  text-decoration: underline;
+}
+.np-star {
+  flex: none;
+}
+
+.np-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.np-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.np-play {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  display: grid;
+  place-items: center;
+  transition: transform 0.14s var(--ease-out), background 0.14s var(--ease-out);
+  padding-left: 1px;
+}
+.np-play:hover {
+  background: var(--accent-hover);
+  transform: scale(1.05);
+}
+.np-play:active {
+  transform: scale(0.97);
+}
+
+.np-seek {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+}
+.np-time {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  width: 38px;
+  flex: none;
+}
+.np-time:first-of-type {
+  text-align: right;
+}
+.np-time:last-of-type {
+  text-align: left;
+}
+
+.np-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.np-volume {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 130px;
+}
+.np-volume-slider {
+  flex: 1;
+}
+
+.np-empty .np-center {
+  opacity: 0.5;
+  pointer-events: none;
+}

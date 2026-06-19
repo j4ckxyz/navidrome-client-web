@@ -1,0 +1,148 @@
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.list-sort {
+  width: auto;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.load-more {
+  display: flex;
+  justify-content: center;
+  padding: 28px 0 8px;
+}
+
+/* Detail page header shared by album/artist/playlist. */
+.detail-head {
+  display: flex;
+  gap: 28px;
+  align-items: flex-end;
+  padding: 8px 0 28px;
+}
+.detail-art {
+  width: 220px;
+  flex: none;
+}
+.detail-art .cover {
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+}
+.detail-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 6px;
+}
+.detail-kind {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.detail-title {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+.detail-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.detail-sub a:hover {
+  color: var(--content-text);
+  text-decoration: underline;
+}
+.detail-dot::before {
+  content: "·";
+  margin-right: 8px;
+}
+
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 22px;
+}
+.play-big {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  height: 50px;
+  padding: 0 26px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 650;
+  font-size: 15px;
+  transition: transform 0.14s var(--ease-out), background 0.14s var(--ease-out);
+}
+.play-big:hover {
+  background: var(--accent-hover);
+  transform: scale(1.03);
+}
+.play-big-icon {
+  padding-left: 2px;
+}
+
+/* Track list with a subtle header row. */
+.tracklist {
+  display: flex;
+  flex-direction: column;
+}
+.tracklist-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 10px 8px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.tracklist-head-num {
+  width: 26px;
+  text-align: center;
+}
+.tracklist-head-title {
+  flex: 1;
+}
+.tracklist-head-album {
+  width: 26%;
+}
+.tracklist-head-dur {
+  width: 46px;
+  text-align: right;
+}
+.tracklist-head-spacer {
+  width: 32px;
+}
+
+.disc-divider {
+  padding: 18px 10px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.bio {
+  max-width: 70ch;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 4px 0 28px;
+}
