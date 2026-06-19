@@ -3,8 +3,23 @@ set -e
 
 echo "Updating navidrome-client-web..."
 
-# 1. Pull the latest version
-echo "Pulling latest version from Git..."
+# 1. Fetch remote tracking branch and check for updates
+echo "Fetching latest changes from Git..."
+git fetch
+
+# Get current branch and its remote tracking counterpart
+BRANCH=$(git symbolic-ref --short -q HEAD || echo "main")
+UPSTREAM="origin/$BRANCH"
+
+LOCAL=$(git rev-parse HEAD)
+REMOTE=$(git rev-parse "$UPSTREAM" 2>/dev/null || git rev-parse origin/main)
+
+if [ "$LOCAL" = "$REMOTE" ]; then
+  echo "Already up to date. No new updates available."
+  exit 0
+fi
+
+echo "New updates detected ($LOCAL -> $REMOTE). Pulling updates..."
 git pull
 
 # 2. Check which docker-compose is running and rebuild
