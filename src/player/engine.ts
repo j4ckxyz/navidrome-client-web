@@ -32,11 +32,16 @@ interface Deck {
   gain: number; // ReplayGain multiplier (1 = unity)
 }
 
-// The Web Audio graph for a single deck: source → preamp → peaking filters → out.
+// The Web Audio graph for a single deck:
+//   source → preamp → peaking filters → limiter → destination
+// The limiter is a brick-wall DynamicsCompressor that catches the peaks a band
+// boost can push past 0 dBFS — without it, boosting (e.g. Bass Boost) clips and
+// sounds crackly/distorted.
 interface EqChain {
   source: MediaElementAudioSourceNode;
   preamp: GainNode;
   filters: BiquadFilterNode[];
+  limiter: DynamicsCompressorNode;
 }
 
 export interface EngineCallbacks {
@@ -214,26 +219,43 @@ export class AudioEngine {
       f.gain.value = this.eqGains[i] ?? 0;
       return f;
     });
-    // source → preamp → f0 → f1 → … → destination
+    // Brick-wall limiter to stop boosted peaks from clipping (the crackle).
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.25;
+    // source → preamp → f0 → f1 → … → limiter → destination
     source.connect(preamp);
     let node: AudioNode = preamp;
     for (const f of filters) {
       node.connect(f);
       node = f;
     }
-    node.connect(ctx.destination);
-    return { source, preamp, filters };
+    node.connect(limiter);
+    limiter.connect(ctx.destination);
+    return { source, preamp, filters, limiter };
   }
 
   // Push the current gains/pre-amp to the live nodes. When inactive, flatten to
   // unity so the graph is a transparent passthrough.
   private applyEqValues(): void {
+    // When EQ is on, pull the whole signal down by the largest boost so a band
+    // sitting at +12 dB has real headroom before the limiter, rather than
+    // slamming it. The limiter then only has to catch transient peaks.
+    const maxBoost = this.eqActive ? Math.max(0, ...this.eqGains, this.eqPreampDb) : 0;
+    const headroomDb = -0.7 * maxBoost; // gentle compensation, not full cut
     for (const chain of this.eqChains) {
       if (!chain) continue;
-      chain.preamp.gain.value = this.eqActive ? Math.pow(10, this.eqPreampDb / 20) : 1;
+      chain.preamp.gain.value = this.eqActive
+        ? Math.pow(10, (this.eqPreampDb + headroomDb) / 20)
+        : 1;
       chain.filters.forEach((f, i) => {
         f.gain.value = this.eqActive ? this.eqGains[i] ?? 0 : 0;
       });
+      // Engage the limiter only when shaping audio; transparent (threshold at
+      // the ceiling) when the EQ is off so passthrough stays bit-clean.
+      chain.limiter.threshold.value = this.eqActive ? -2 : 0;
     }
   }
 

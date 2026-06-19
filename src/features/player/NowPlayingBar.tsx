@@ -6,6 +6,7 @@ import { A } from "@solidjs/router";
 import { createMemo, Show } from "solid-js";
 import { player } from "~/player/store";
 import { settings, updateSettings } from "~/settings/store";
+import { openFullScreen } from "./fullscreen";
 import { isStarred, toggleStar } from "~/features/stars";
 import { CoverArt } from "~/ui/CoverArt";
 import { Icon } from "~/ui/Icon";
@@ -25,7 +26,17 @@ export function NowPlayingBar() {
     <footer class="np-bar" classList={{ "np-empty": !song() }}>
       <div class="np-left">
         <Show when={song()} fallback={<div class="np-placeholder muted">Nothing playing</div>}>
-          <CoverArt coverArt={song()!.coverArt} size={56} alt="" />
+          <button
+            class="np-cover-btn"
+            onClick={openFullScreen}
+            aria-label="Open full screen player"
+            title="Open full screen"
+          >
+            <CoverArt coverArt={song()!.coverArt} size={56} alt="" />
+            <span class="np-cover-expand">
+              <Icon name="chevron-right" size={18} />
+            </span>
+          </button>
           <div class="np-meta">
             <A href={song()!.albumId ? `/album/${song()!.albumId}` : "#"} class="np-title">
               {song()!.title}
