@@ -17,33 +17,17 @@
   line-height: 1.15;
 }
 
-.wrapped-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
-  margin-bottom: 30px;
+.wrapped-lede {
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 46ch;
+  margin-bottom: 32px;
 }
-.wrapped-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 16px 18px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-.wrapped-stat-icon {
-  color: var(--accent);
-  margin-bottom: 2px;
-}
-.wrapped-stat-value {
-  font-size: 24px;
-  font-weight: 700;
+.wrapped-lede b {
+  color: var(--content-text);
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-}
-.wrapped-stat-label {
-  font-size: 12px;
 }
 
 .wrapped-section {

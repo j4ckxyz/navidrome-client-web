@@ -101,13 +101,15 @@ export default function Wrapped() {
       </header>
 
       <Show when={!loading()} fallback={<div class="center-state"><span class="spinner" /></div>}>
-        {/* Stat tiles */}
-        <div class="wrapped-stats">
-          <StatTile icon="mic" value={(artistsQ.data?.length ?? 0).toLocaleString()} label="Artists" />
-          <StatTile icon="disc" value={topAlbums().length ? `${(frequent.data?.length ?? 0).toLocaleString()}+` : "0"} label="Albums played" />
-          <StatTile icon="play" value={totalSongs().toLocaleString()} label="Songs in library" />
-          <StatTile icon="heart" value={favourites().toLocaleString()} label="Favourites" />
-        </div>
+        {/* A calm one-line summary instead of a dashboard of metric tiles. */}
+        <p class="wrapped-lede">
+          Your library holds <b>{(artistsQ.data?.length ?? 0).toLocaleString()}</b> artists and{" "}
+          <b>{totalSongs().toLocaleString()}</b> songs
+          <Show when={favourites() > 0}>
+            , <b>{favourites().toLocaleString()}</b> of them favourites
+          </Show>
+          .
+        </p>
 
         <Show
           when={hasPlays()}
@@ -161,16 +163,6 @@ export default function Wrapped() {
           </section>
         </Show>
       </Show>
-    </div>
-  );
-}
-
-function StatTile(props: { icon: Parameters<typeof Icon>[0]["name"]; value: string; label: string }) {
-  return (
-    <div class="wrapped-stat">
-      <span class="wrapped-stat-icon"><Icon name={props.icon} size={18} /></span>
-      <span class="wrapped-stat-value">{props.value}</span>
-      <span class="wrapped-stat-label muted">{props.label}</span>
     </div>
   );
 }
