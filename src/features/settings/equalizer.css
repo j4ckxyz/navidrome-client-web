@@ -3,6 +3,18 @@
   flex-direction: column;
 }
 
+/* Reveal: hints/warnings ease in rather than snapping into the layout. */
+@keyframes eq-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .eq-warning {
   display: flex;
   align-items: center;
@@ -10,9 +22,11 @@
   font-size: 13px;
   color: #e06a6a;
   margin: 4px 0 12px;
+  animation: eq-reveal 0.26s var(--ease-out) both;
 }
 .eq-cors-hint {
   margin-bottom: 8px;
+  animation: eq-reveal 0.26s var(--ease-out) both;
 }
 .eq-cors-hint code {
   font-size: 12px;
@@ -30,9 +44,12 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
+  /* Wakes up / dims down smoothly when the EQ is toggled. */
+  transition: opacity 0.28s var(--ease-out), filter 0.28s var(--ease-out);
 }
 .eq-body[disabled] {
-  opacity: 0.45;
+  opacity: 0.4;
+  filter: saturate(0.4);
   pointer-events: none;
 }
 
@@ -58,6 +75,13 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
+}
+/* The loop icon turns once, signalling "back to flat". */
+.eq-reset svg {
+  transition: transform 0.45s var(--ease-out);
+}
+.eq-reset:hover svg {
+  transform: rotate(-180deg);
 }
 
 /* The band graph: a row of vertical sliders. */
@@ -96,6 +120,15 @@
   height: 130px;
   accent-color: var(--accent);
   cursor: pointer;
+  /* The touched band thickens slightly — tactile without moving layout. */
+  transition: transform 0.16s var(--ease-out), filter 0.16s var(--ease-out);
+}
+.eq-slider:hover {
+  transform: scaleX(1.5);
+}
+.eq-slider:active {
+  transform: scaleX(1.5);
+  filter: brightness(1.15);
 }
 
 .eq-band-value {
@@ -103,6 +136,12 @@
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
   min-height: 14px;
+  transition: color 0.18s var(--ease-out);
+}
+/* A boosted/cut band lights its readout in the accent, so the shape of the
+   curve reads at a glance. */
+.eq-band-value-active {
+  color: var(--accent);
 }
 .eq-band-label {
   font-size: 11px;
@@ -133,6 +172,17 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+@keyframes eq-chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .eq-user-chip {
   display: inline-flex;
   align-items: center;
@@ -143,10 +193,16 @@
   border: 1px solid var(--border);
   font-size: 13px;
   color: var(--content-text);
-  transition: border-color 0.14s var(--ease-out), background 0.14s var(--ease-out);
+  transition: border-color 0.14s var(--ease-out), background 0.14s var(--ease-out),
+    transform 0.14s var(--ease-out);
+  animation: eq-chip-in 0.22s var(--ease-out) both;
 }
 .eq-user-chip:hover {
   border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.eq-user-chip:active {
+  transform: translateY(0);
 }
 .eq-user-chip-active {
   border-color: var(--accent);
@@ -159,7 +215,9 @@
   color: var(--text-muted);
   border-radius: 50%;
   padding: 1px;
+  transition: color 0.14s var(--ease-out), transform 0.14s var(--ease-out);
 }
 .eq-user-chip-del:hover {
   color: #e06a6a;
+  transform: rotate(90deg);
 }

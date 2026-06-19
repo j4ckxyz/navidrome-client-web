@@ -200,7 +200,12 @@ export function EqualizerEditor() {
               aria-label="Pre-amp"
               onInput={(e) => setPreamp(Number(e.currentTarget.value))}
             />
-            <span class="eq-band-value">{fmt(eq().preampDb)}</span>
+            <span
+              class="eq-band-value"
+              classList={{ "eq-band-value-active": eq().preampDb !== 0 }}
+            >
+              {fmt(eq().preampDb)}
+            </span>
             <span class="eq-band-label">Pre</span>
           </div>
 
@@ -219,7 +224,12 @@ export function EqualizerEditor() {
                   aria-label={`${label} Hz band`}
                   onInput={(e) => setBand(i(), Number(e.currentTarget.value))}
                 />
-                <span class="eq-band-value">{fmt(eq().gains[i()] ?? 0)}</span>
+                <span
+                  class="eq-band-value"
+                  classList={{ "eq-band-value-active": (eq().gains[i()] ?? 0) !== 0 }}
+                >
+                  {fmt(eq().gains[i()] ?? 0)}
+                </span>
                 <span class="eq-band-label">{label}</span>
               </div>
             )}
