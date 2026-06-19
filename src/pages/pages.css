@@ -114,15 +114,25 @@
   text-transform: uppercase;
   color: var(--text-muted);
 }
+/* Widths mirror the columns in .track-row so headers sit above their values. */
 .tracklist-head-num {
   width: 26px;
   text-align: center;
+}
+.tracklist-head-cover {
+  width: 38px;
 }
 .tracklist-head-title {
   flex: 1;
 }
 .tracklist-head-album {
   width: 26%;
+}
+.tracklist-head-plays {
+  width: 52px;
+}
+.tracklist-head-star {
+  width: 32px;
 }
 .tracklist-head-dur {
   width: 46px;

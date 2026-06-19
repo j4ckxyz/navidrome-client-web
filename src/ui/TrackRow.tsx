@@ -131,12 +131,14 @@ export function TrackRow(props: TrackRowProps) {
           <span class="track-album muted">{props.song.album}</span>
         </Show>
 
-        <Show when={settings.layout.showPlayCounts && (props.song.playCount ?? 0) > 0}>
+        <Show when={settings.layout.showPlayCounts}>
           <span
             class="track-plays muted"
             title={props.song.played ? `Last played ${formatRelativeDate(props.song.played)}` : undefined}
           >
-            {props.song.playCount}&nbsp;<Icon name="play" size={11} />
+            <Show when={(props.song.playCount ?? 0) > 0}>
+              {props.song.playCount}&nbsp;<Icon name="play" size={11} />
+            </Show>
           </span>
         </Show>
 

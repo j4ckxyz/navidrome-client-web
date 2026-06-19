@@ -3,6 +3,7 @@
 
 import { For, Show } from "solid-js";
 import type { Song } from "~/api/types";
+import { settings } from "~/settings/store";
 import { TrackRow } from "./TrackRow";
 
 export function SongList(props: {
@@ -23,12 +24,20 @@ export function SongList(props: {
   return (
     <div class="tracklist">
       <Show when={props.showHeader}>
+        {/* Spacer columns mirror the row layout so labels line up with values. */}
         <div class="tracklist-head">
           <span class="tracklist-head-num">#</span>
+          <Show when={props.showCover}>
+            <span class="tracklist-head-cover" />
+          </Show>
           <span class="tracklist-head-title">Title</span>
           <Show when={props.showAlbum}>
             <span class="tracklist-head-album">Album</span>
           </Show>
+          <Show when={settings.layout.showPlayCounts}>
+            <span class="tracklist-head-plays" />
+          </Show>
+          <span class="tracklist-head-star" />
           <span class="tracklist-head-dur">Time</span>
           <span class="tracklist-head-spacer" />
         </div>

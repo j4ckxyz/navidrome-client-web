@@ -214,14 +214,14 @@
 .fs-volume {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
   flex: none;
-  max-width: 260px;
-  width: 100%;
-  margin: 0 auto;
 }
+/* Fixed-width slider so the icon + bar centre as one balanced group. */
 .fs-volume .slider {
-  flex: 1;
+  width: 200px;
+  flex: none;
 }
 
 .fs-empty {

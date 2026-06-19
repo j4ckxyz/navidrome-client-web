@@ -2,7 +2,9 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  height: var(--row-height);
+  /* min-height (not height) so the cover never overflows into the next row at
+     compact density. */
+  min-height: var(--row-height);
   padding: 0 10px;
   border-radius: var(--radius);
   transition: background 0.12s var(--ease-out);
