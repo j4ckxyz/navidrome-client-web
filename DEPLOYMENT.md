@@ -219,6 +219,27 @@ and syncs to every client — including Navidrome's own UI.
 
 ---
 
+## Updating
+
+From a git checkout of this repo, run:
+
+```bash
+bun run update
+```
+
+This checks GitHub (`origin`) for a newer version and, if there is one, fast-forwards
+your checkout to it **without touching your local `docker-compose*.yml` or `.env`
+files**, so your deployment config is preserved. It then rebuilds and restarts the
+running stack — the full stack (`docker-compose.full.yml`) if the bundled `navidrome`
+container is up, otherwise the client-only stack (`docker-compose.yml`).
+
+The command is cross-platform (Windows, macOS, Linux) and works with both Docker
+Compose v2 (`docker compose`) and v1 (`docker-compose`). It's safe to re-run: if
+you're already on the latest commit and the container matches, it exits without
+rebuilding.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -240,3 +261,4 @@ and syncs to every client — including Navidrome's own UI.
 | `docker-compose.full.yml` | All-in-one: Navidrome **and** the client sharing a music folder. |
 | `Dockerfile` | Builds the static bundle and the Bun runtime image. |
 | `server/index.ts` | The Bun server: static hosting, API proxy, `/upload`, `/api/config`. |
+| `scripts/update.ts` | Cross-platform updater run by `bun run update` (pulls latest, preserves config, rebuilds). |

@@ -4,7 +4,16 @@
 
 export const SETTINGS_VERSION = 1 as const;
 
-export type ThemePreset = "dark" | "light" | "midnight" | "warm" | "mono" | "apple-music" | "spotify" | "custom";
+export type ThemePreset =
+  | "dark"
+  | "light"
+  | "midnight"
+  | "warm"
+  | "mono"
+  | "apple-music"
+  | "apple-music-dark"
+  | "spotify"
+  | "custom";
 export type CustomizationMode = "simple" | "advanced";
 
 // The nine deliberate, documented themeable regions. Dividers/borders are
@@ -45,6 +54,50 @@ export type LandingPage =
 
 export type ReplayGainMode = "off" | "track" | "album";
 export type LogLevel = "silent" | "error" | "info" | "debug";
+
+// --- Equalizer -------------------------------------------------------------
+// A 10-band graphic equalizer applied via Web Audio peaking filters. The
+// frequencies are the ISO-standard octave centres used by most graphic EQs.
+export const EQ_FREQUENCIES = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000] as const;
+export const EQ_BAND_COUNT = EQ_FREQUENCIES.length;
+export const EQ_GAIN_LIMIT = 12; // bands and pre-amp clamp to ±12 dB
+
+// Human-friendly band labels (Hz / kHz).
+export const EQ_BAND_LABELS = EQ_FREQUENCIES.map((f) =>
+  f >= 1000 ? `${f / 1000}K` : `${f}`,
+);
+
+export interface EqualizerPreset {
+  id: string;
+  name: string;
+  gains: number[]; // length EQ_BAND_COUNT, dB per band
+}
+
+export interface EqualizerSettings {
+  enabled: boolean;
+  preset: string; // built-in preset id, user preset id, or "custom"
+  preampDb: number; // -12..12
+  gains: number[]; // current band gains (length EQ_BAND_COUNT)
+  userPresets: EqualizerPreset[];
+}
+
+// Built-in presets. "Flat" is the neutral baseline; the rest are tuned to be
+// noticeable but not destructive within the ±12 dB range.
+export const EQ_PRESETS: { id: string; name: string; gains: number[] }[] = [
+  { id: "flat", name: "Flat", gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+  { id: "bass-boost", name: "Bass Boost", gains: [7, 6, 5, 3, 1, 0, 0, 0, 0, 0] },
+  { id: "bass-reducer", name: "Bass Reducer", gains: [-7, -6, -5, -3, -1, 0, 0, 0, 0, 0] },
+  { id: "treble-boost", name: "Treble Boost", gains: [0, 0, 0, 0, 0, 1, 3, 5, 6, 7] },
+  { id: "vocal", name: "Vocal Boost", gains: [-2, -3, -2, 1, 4, 5, 4, 2, 0, -1] },
+  { id: "rock", name: "Rock", gains: [5, 4, 3, 1, -1, -1, 1, 3, 4, 5] },
+  { id: "pop", name: "Pop", gains: [-1, 0, 2, 4, 4, 3, 1, 0, -1, -2] },
+  { id: "jazz", name: "Jazz", gains: [3, 2, 1, 2, -1, -1, 0, 1, 2, 3] },
+  { id: "classical", name: "Classical", gains: [4, 3, 2, 1, -1, -1, 0, 2, 3, 4] },
+  { id: "electronic", name: "Electronic", gains: [5, 4, 1, 0, -2, 1, 0, 1, 4, 5] },
+  { id: "acoustic", name: "Acoustic", gains: [4, 4, 2, 1, 2, 2, 3, 3, 2, 1] },
+  { id: "loudness", name: "Loudness", gains: [6, 4, 0, 0, -2, 0, 0, -3, 5, 6] },
+  { id: "podcast", name: "Spoken Word", gains: [-4, -3, 0, 3, 4, 4, 3, 2, 0, -2] },
+];
 
 // Rebindable playback/navigation actions.
 export type ShortcutAction =
@@ -115,6 +168,7 @@ export interface Settings {
     replayGain: { mode: ReplayGainMode; preAmpDb: number };
     resumeQueueOnLaunch: boolean;
     maxBitRate: number; // 0 = original
+    equalizer: EqualizerSettings;
   };
 
   power: {
@@ -216,6 +270,17 @@ export const PRESET_COLORS: Record<Exclude<ThemePreset, "custom">, ThemeColors> 
     surface: "#f5f5f7",
     nowPlayingBg: "#ffffff",
   },
+  "apple-music-dark": {
+    accent: "#fa233b",
+    accentText: "#ffffff",
+    sidebarBg: "#000000",
+    sidebarText: "#f5f5f7",
+    contentBg: "#1c1c1e",
+    contentText: "#f5f5f7",
+    textMuted: "#98989d",
+    surface: "#2c2c2e",
+    nowPlayingBg: "#1c1c1e",
+  },
   spotify: {
     accent: "#1ed760",
     accentText: "#121212",
@@ -232,10 +297,10 @@ export const PRESET_COLORS: Record<Exclude<ThemePreset, "custom">, ThemeColors> 
 export const DEFAULT_SETTINGS: Settings = {
   version: SETTINGS_VERSION,
   theme: {
-    preset: "dark",
+    preset: "midnight",
     customizationMode: "simple",
     base: "dark",
-    colors: DARK_COLORS,
+    colors: PRESET_COLORS.midnight,
     userPresets: [],
   },
   layout: {
@@ -254,6 +319,13 @@ export const DEFAULT_SETTINGS: Settings = {
     replayGain: { mode: "off", preAmpDb: 0 },
     resumeQueueOnLaunch: true,
     maxBitRate: 0,
+    equalizer: {
+      enabled: false,
+      preset: "flat",
+      preampDb: 0,
+      gains: [...EQ_PRESETS[0].gains],
+      userPresets: [],
+    },
   },
   power: {
     shortcuts: { ...DEFAULT_SHORTCUTS },

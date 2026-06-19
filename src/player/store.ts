@@ -130,6 +130,18 @@ function createPlayer() {
   });
   engine.setVolume(state.volume);
   engine.setCrossfade(settings.playback.crossfadeSeconds);
+  // Apply the saved equalizer state. If it was left enabled, the Web Audio graph
+  // is built up front so it's ready for the first track.
+  syncEqualizer();
+
+  function syncEqualizer(): boolean {
+    const eq = settings.playback.equalizer;
+    return engine.setEqualizer({
+      enabled: eq.enabled,
+      preampDb: eq.preampDb,
+      gains: eq.gains,
+    });
+  }
 
   function current(): Song | undefined {
     return state.queue[state.index];
@@ -451,6 +463,8 @@ function createPlayer() {
     current,
     restoreQueue,
     syncCrossfade: () => engine.setCrossfade(settings.playback.crossfadeSeconds),
+    syncEqualizer,
+    equalizerAvailable: () => engine.isEqualizerAvailable(),
   };
 }
 

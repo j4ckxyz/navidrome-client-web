@@ -1,13 +1,29 @@
 // Low-level audio engine. Two "decks" (A/B), each an <audio> element.
 // Volume control, crossfade, and ReplayGain normalization are done by
-// manipulating element.volume directly — no Web Audio API. This avoids the
-// CORS requirement that createMediaElementSource imposes (Navidrome's
+// manipulating element.volume directly — no Web Audio API by default. This
+// avoids the CORS requirement that createMediaElementSource imposes (Navidrome's
 // stream endpoint often doesn't send Access-Control-Allow-Origin).
+//
+// The equalizer is the one feature that *needs* Web Audio: when enabled it taps
+// each deck through a chain of peaking BiquadFilters. createMediaElementSource
+// requires the media to be CORS-clean, so enabling the EQ sets crossOrigin on
+// the elements and reloads them. This works transparently when the app is served
+// in proxy mode (streams are same-origin); in direct mode it needs the Navidrome
+// server to send CORS headers. element.volume keeps working through the graph, so
+// volume/crossfade/ReplayGain are unaffected.
+
+import { EQ_FREQUENCIES, EQ_BAND_COUNT } from "~/settings/schema";
 
 export interface DeckTrack {
   url: string;
   replayGainDb: number; // 0 when normalization is off
   peak: number; // 1 when unknown; used to avoid clipping
+}
+
+export interface EqualizerState {
+  enabled: boolean;
+  preampDb: number;
+  gains: number[]; // length EQ_BAND_COUNT
 }
 
 interface Deck {
@@ -16,11 +32,23 @@ interface Deck {
   gain: number; // ReplayGain multiplier (1 = unity)
 }
 
+// The Web Audio graph for a single deck: source → preamp → peaking filters → out.
+interface EqChain {
+  source: MediaElementAudioSourceNode;
+  preamp: GainNode;
+  filters: BiquadFilterNode[];
+}
+
 export interface EngineCallbacks {
   onProgress: (time: number, duration: number) => void;
   onEnded: () => void;
   onPlayingChange: (playing: boolean) => void;
   onCrossfadeStart: () => void;
+}
+
+function clampDb(db: number): number {
+  if (!Number.isFinite(db)) return 0;
+  return Math.max(-12, Math.min(12, db));
 }
 
 function gainFromDb(db: number, peak: number): number {
@@ -40,6 +68,16 @@ export class AudioEngine {
   private xfadeStartTime = 0; // performance.now() when xfade began
   private raf = 0;
   private cb: EngineCallbacks;
+
+  // Equalizer (Web Audio). The graph is built lazily on first enable and never
+  // torn down — createMediaElementSource is irreversible — so "disabling" just
+  // flattens the filters. `eqActive` mirrors whether the graph is currently
+  // shaping audio.
+  private audioCtx: AudioContext | null = null;
+  private eqChains: [EqChain | null, EqChain | null] = [null, null];
+  private eqActive = false;
+  private eqPreampDb = 0;
+  private eqGains: number[] = new Array(EQ_BAND_COUNT).fill(0);
 
   constructor(cb: EngineCallbacks) {
     this.cb = cb;
@@ -92,6 +130,120 @@ export class AudioEngine {
     this.crossfadeSeconds = Math.max(0, Math.min(12, seconds));
   }
 
+  // --- Equalizer ---
+
+  // Apply EQ state. The first time it's enabled we build the Web Audio graph
+  // (which requires CORS-clean media, so we set crossOrigin and reload sources).
+  // Returns false if enabling failed (e.g. Web Audio unavailable). Band gains
+  // and pre-amp update live without rebuilding.
+  setEqualizer(state: EqualizerState): boolean {
+    this.eqPreampDb = clampDb(state.preampDb);
+    this.eqGains = EQ_FREQUENCIES.map((_, i) => clampDb(state.gains[i] ?? 0));
+
+    if (state.enabled && !this.audioCtx) {
+      if (!this.buildEqGraph()) return false;
+    }
+    this.eqActive = state.enabled && !!this.audioCtx;
+    this.applyEqValues();
+    return !state.enabled || this.eqActive;
+  }
+
+  isEqualizerAvailable(): boolean {
+    return typeof window !== "undefined" && "AudioContext" in window;
+  }
+
+  // One-time construction of the AudioContext and per-deck filter chains. Sets
+  // crossOrigin on both elements and reloads any in-flight source so the graph
+  // receives real samples rather than silence.
+  private buildEqGraph(): boolean {
+    if (this.audioCtx) return true;
+    const Ctx = window.AudioContext ?? (window as any).webkitAudioContext;
+    if (!Ctx) return false;
+    try {
+      this.audioCtx = new Ctx();
+    } catch (err) {
+      console.warn("Equalizer: could not create AudioContext", err);
+      return false;
+    }
+
+    for (let i = 0; i < this.decks.length; i++) {
+      const deck = this.decks[i];
+      this.makeCrossOrigin(deck);
+      try {
+        this.eqChains[i] = this.buildChain(deck);
+      } catch (err) {
+        console.warn("Equalizer: could not build filter chain", err);
+      }
+    }
+    return true;
+  }
+
+  // Set crossOrigin on a deck and reload its current source in place, preserving
+  // playback position and play/pause state. No-op if already cross-origin or idle.
+  private makeCrossOrigin(deck: Deck): void {
+    if (deck.el.crossOrigin === "anonymous") return;
+    deck.el.crossOrigin = "anonymous";
+    if (!deck.url) return;
+    const wasPlaying = !deck.el.paused;
+    const time = deck.el.currentTime;
+    deck.el.src = deck.url;
+    deck.el.load();
+    if (time > 0) {
+      const restore = () => {
+        try {
+          deck.el.currentTime = time;
+        } catch {
+          // ignore — element not yet seekable
+        }
+        deck.el.removeEventListener("loadedmetadata", restore);
+      };
+      deck.el.addEventListener("loadedmetadata", restore);
+    }
+    if (wasPlaying) void deck.el.play();
+  }
+
+  private buildChain(deck: Deck): EqChain {
+    const ctx = this.audioCtx!;
+    const source = ctx.createMediaElementSource(deck.el);
+    const preamp = ctx.createGain();
+    const filters = EQ_FREQUENCIES.map((freq, i) => {
+      const f = ctx.createBiquadFilter();
+      f.type = "peaking";
+      f.frequency.value = freq;
+      f.Q.value = 1.1;
+      f.gain.value = this.eqGains[i] ?? 0;
+      return f;
+    });
+    // source → preamp → f0 → f1 → … → destination
+    source.connect(preamp);
+    let node: AudioNode = preamp;
+    for (const f of filters) {
+      node.connect(f);
+      node = f;
+    }
+    node.connect(ctx.destination);
+    return { source, preamp, filters };
+  }
+
+  // Push the current gains/pre-amp to the live nodes. When inactive, flatten to
+  // unity so the graph is a transparent passthrough.
+  private applyEqValues(): void {
+    for (const chain of this.eqChains) {
+      if (!chain) continue;
+      chain.preamp.gain.value = this.eqActive ? Math.pow(10, this.eqPreampDb / 20) : 1;
+      chain.filters.forEach((f, i) => {
+        f.gain.value = this.eqActive ? this.eqGains[i] ?? 0 : 0;
+      });
+    }
+  }
+
+  // Resume a suspended context (autoplay policy parks it until a user gesture).
+  private resumeContext(): void {
+    if (this.audioCtx && this.audioCtx.state === "suspended") {
+      void this.audioCtx.resume();
+    }
+  }
+
   setVolume(v: number): void {
     this.volume = Math.max(0, Math.min(1, v));
     if (!this.xfadeActive) {
@@ -118,6 +270,7 @@ export class AudioEngine {
 
   async play(track: DeckTrack): Promise<void> {
     this.xfadeActive = false;
+    this.resumeContext();
 
     let deck: Deck;
     if (this.idleDeck().url === track.url) {
@@ -150,6 +303,7 @@ export class AudioEngine {
   resume(): void {
     const el = this.activeDeck().el;
     if (!el.src) return;
+    this.resumeContext();
     void el.play();
   }
 
