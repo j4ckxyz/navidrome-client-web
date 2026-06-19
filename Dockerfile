@@ -32,3 +32,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD wget -q -O /dev/null http://localhost:8080/api/config || exit 1
 
 CMD ["bun", "run", "server/index.ts"]
+
+ARG COMMIT_HASH
+LABEL org.opencontainers.image.revision=${COMMIT_HASH}

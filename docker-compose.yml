@@ -12,7 +12,10 @@
 
 services:
   navidrome-web:
-    build: .
+    build:
+      context: .
+      args:
+        - COMMIT_HASH
     image: navidrome-client-web:latest
     container_name: navidrome-web
     ports:
