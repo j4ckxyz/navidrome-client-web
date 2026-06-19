@@ -183,19 +183,41 @@ if (updatesAvailable) {
 
 const head = capture("git", ["rev-parse", "HEAD"]);
 
-// Full stack if the bundled Navidrome container is running, otherwise client-only.
-const fullStack =
-  capture("docker", ["ps", "--filter", "name=^navidrome$", "--filter", "status=running", "--format", "{{.Names}}"]) === "navidrome";
-
-const composeFile = fullStack ? "docker-compose.full.yml" : "docker-compose.yml";
+const composeFile = detectComposeFile();
+const fullStack = composeFile === "docker-compose.full.yml";
 console.log(
   `\n${fullStack ? "Full stack" : "Client-only"} deployment detected.` +
     ` Rebuilding with ${composeFile}…`,
 );
 
 const buildEnv = { ...process.env, COMMIT_HASH: head };
-const composeArgs = [...compose.slice(1), "-f", composeFile, "up", "-d", "--build"];
-const buildRes = run(compose[0], composeArgs, { env: buildEnv });
+const composeBase = compose.slice(1); // [] for v1, ["compose"] for v2
+
+// Tear the existing stack down before rebuilding. Recreating in place can fail
+// with a "container name already in use" conflict when the running container was
+// created under a different Compose project (different path/casing/tool). So:
+//   1. `down` the current project cleanly,
+//   2. force-remove any leftover containers by name (down only touches the
+//      current project; this catches cross-project leftovers),
+//   3. build and start fresh.
+// Removing the containers is safe — all persistent data lives in bind mounts /
+// named volumes (./nd-data, ./music), not in the containers themselves.
+console.log("Stopping the current stack…");
+run(compose[0], [...composeBase, "-f", composeFile, "down", "--remove-orphans"], {
+  env: buildEnv,
+  allowFail: true,
+});
+
+// In client-only mode we must NOT touch a separately-managed `navidrome`.
+const stale = fullStack ? ["navidrome-web", "navidrome"] : ["navidrome-web"];
+for (const name of stale) {
+  run("docker", ["rm", "-f", name], { capture: true, allowFail: true });
+}
+
+console.log("Building and starting the latest version…");
+const buildRes = run(compose[0], [...composeBase, "-f", composeFile, "up", "-d", "--build"], {
+  env: buildEnv,
+});
 if (buildRes.status !== 0) {
   fail("Docker build/restart failed. See the output above for details.");
 }
@@ -204,4 +226,22 @@ console.log(`\n✓ Update complete — now running ${short(head)}.`);
 
 function short(hash: string): string {
   return hash ? hash.slice(0, 8) : "unknown";
+}
+
+// Decide which compose file drives this deployment. The most reliable signal is
+// the Compose config-files label on the running web container; fall back to
+// whether a bundled `navidrome` container exists.
+function detectComposeFile(): string {
+  const label = capture("docker", [
+    "inspect",
+    "navidrome-web",
+    "--format",
+    '{{index .Config.Labels "com.docker.compose.project.config_files"}}',
+  ]);
+  if (label.includes("docker-compose.full.yml")) return "docker-compose.full.yml";
+  if (label.includes("docker-compose.yml")) return "docker-compose.yml";
+
+  // Fallback: the full stack owns a `navidrome` container (any state).
+  const hasNavidrome = capture("docker", ["ps", "-aq", "-f", "name=^navidrome$"]).length > 0;
+  return hasNavidrome ? "docker-compose.full.yml" : "docker-compose.yml";
 }
