@@ -34,6 +34,17 @@
   --font: "Jost", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
+  /* One four-step weight system (Jost is a 300–700 variable font). Use these,
+     not ad-hoc values, so type weight stays consistent and intentional:
+       regular  → body text
+       medium   → titles in lists/cards (a step above body)
+       semibold → section/panel titles, labels, emphasis
+       bold     → page and hero titles */
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
 }
@@ -56,6 +67,10 @@ body {
   color: var(--content-text);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* Let the variable font pick the right optical grade per size, and turn on
+     kerning — small but real polish for Jost. */
+  font-optical-sizing: auto;
+  font-kerning: normal;
   font-size: 14px;
   line-height: 1.5;
   overflow: hidden;
@@ -216,12 +231,12 @@ img {
 }
 .page-title {
   font-size: 25px;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.02em;
 }
 .section-title {
   font-size: 17px;
-  font-weight: 650;
+  font-weight: var(--fw-semibold);
   letter-spacing: -0.01em;
   margin-bottom: 12px;
 }

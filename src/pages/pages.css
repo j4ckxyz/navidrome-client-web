@@ -47,7 +47,7 @@
 }
 .detail-title {
   font-size: 40px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.05;
 }
@@ -84,7 +84,7 @@
   border-radius: 999px;
   background: var(--accent);
   color: var(--on-accent);
-  font-weight: 650;
+  font-weight: 600;
   font-size: 15px;
   transition: transform 0.14s var(--ease-out), background 0.14s var(--ease-out);
 }

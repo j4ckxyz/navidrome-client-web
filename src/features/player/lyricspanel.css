@@ -23,6 +23,6 @@
 .lyrics-line-active {
   color: var(--accent) !important;
   opacity: 1 !important;
-  font-weight: 650;
+  font-weight: 600;
   font-size: 20px !important;
 }
