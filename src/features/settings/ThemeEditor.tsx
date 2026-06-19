@@ -46,6 +46,14 @@ const PRESETS: { id: Exclude<ThemePreset, "custom">; label: string }[] = [
   { id: "pastel-pink", label: "Pastel Pink" },
   { id: "solarized-light", label: "Solarized Light" },
   { id: "cyberpunk", label: "Cyberpunk" },
+  { id: "gruvbox-dark", label: "Gruvbox Dark" },
+  { id: "tokyo-night", label: "Tokyo Night" },
+  { id: "one-dark", label: "One Dark" },
+  { id: "serika-dark", label: "Serika Dark" },
+  { id: "cyberspace", label: "Cyberspace" },
+  { id: "lavender-dark", label: "Lavender Dark" },
+  { id: "matrix", label: "Matrix" },
+  { id: "carbon-orange", label: "Carbon Orange" },
 ];
 
 function ColorField(props: { label: string; value: string; onChange: (hex: string) => void }) {
@@ -88,6 +96,34 @@ export function ThemeEditor() {
   const effective = createMemo(() => resolveColors(settings.theme));
 
   const [newPresetName, setNewPresetName] = createSignal("");
+  const [search, setSearch] = createSignal("");
+  const [filterType, setFilterType] = createSignal<"all" | "dark" | "light">("all");
+
+  const filteredPresets = createMemo(() => {
+    const q = search().toLowerCase().trim();
+    return PRESETS.filter((p) => {
+      const matchesSearch = p.label.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
+      if (!matchesSearch) return false;
+
+      const isL = LIGHT_PRESETS.has(p.id);
+      if (filterType() === "light") return isL;
+      if (filterType() === "dark") return !isL;
+      return true;
+    });
+  });
+
+  const filteredUserPresets = createMemo(() => {
+    const q = search().toLowerCase().trim();
+    return (settings.theme.userPresets || []).filter((p) => {
+      const matchesSearch = p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
+      if (!matchesSearch) return false;
+
+      const isL = p.base === "light";
+      if (filterType() === "light") return isL;
+      if (filterType() === "dark") return !isL;
+      return true;
+    });
+  });
 
   function applyPreset(id: string) {
     const userPreset = settings.theme.userPresets?.find((p) => p.id === id);
@@ -242,8 +278,44 @@ export function ThemeEditor() {
     <div class="settings-section">
       <div class="settings-block">
         <h3 class="settings-block-title">Presets</h3>
+        
+        <div class="preset-controls">
+          <div class="preset-search-wrapper">
+            <span class="preset-search-icon">
+              <Icon name="search" size={16} />
+            </span>
+            <input
+              type="text"
+              class="input preset-search-input"
+              placeholder="Search presets... (e.g. nord, pastel)"
+              value={search()}
+              onInput={(e) => setSearch(e.currentTarget.value)}
+            />
+          </div>
+          <div class="segmented">
+            <button
+              classList={{ "segmented-on": filterType() === "all" }}
+              onClick={() => setFilterType("all")}
+            >
+              All
+            </button>
+            <button
+              classList={{ "segmented-on": filterType() === "dark" }}
+              onClick={() => setFilterType("dark")}
+            >
+              Dark
+            </button>
+            <button
+              classList={{ "segmented-on": filterType() === "light" }}
+              onClick={() => setFilterType("light")}
+            >
+              Light
+            </button>
+          </div>
+        </div>
+
         <div class="preset-grid">
-          <For each={PRESETS}>
+          <For each={filteredPresets()}>
             {(p) => (
               <div
                 class="preset-card"
@@ -275,7 +347,7 @@ export function ThemeEditor() {
             )}
           </For>
 
-          <For each={settings.theme.userPresets || []}>
+          <For each={filteredUserPresets()}>
             {(p) => (
               <div
                 class="preset-card"
@@ -310,6 +382,12 @@ export function ThemeEditor() {
               </div>
             )}
           </For>
+
+          <Show when={filteredPresets().length === 0 && filteredUserPresets().length === 0}>
+            <div class="preset-empty-state">
+              No presets match your search criteria.
+            </div>
+          </Show>
         </div>
 
         <Show when={isApplePreset()}>

@@ -234,3 +234,42 @@
 .preset-card-active .preset-card-delete {
   right: 38px;
 }
+
+.preset-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+  justify-content: space-between;
+}
+.preset-search-wrapper {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+}
+.preset-search-input {
+  width: 100%;
+  padding: 8px 12px 8px 36px !important;
+  font-size: 13px;
+}
+.preset-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+.preset-empty-state {
+  grid-column: 1 / -1;
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}

@@ -24,6 +24,14 @@ export type ThemePreset =
   | "pastel-pink"
   | "solarized-light"
   | "cyberpunk"
+  | "gruvbox-dark"
+  | "tokyo-night"
+  | "one-dark"
+  | "serika-dark"
+  | "cyberspace"
+  | "lavender-dark"
+  | "matrix"
+  | "carbon-orange"
   | "custom";
 export type CustomizationMode = "simple" | "advanced";
 
@@ -429,6 +437,94 @@ export const PRESET_COLORS: Record<Exclude<ThemePreset, "custom">, ThemeColors> 
     textMuted: "#7a7ab8",
     surface: "#25254d",
     nowPlayingBg: "#0a0a14",
+  },
+  "gruvbox-dark": {
+    accent: "#fe8019",
+    accentText: "#282828",
+    sidebarBg: "#1d2021",
+    sidebarText: "#ebdbb2",
+    contentBg: "#282828",
+    contentText: "#ebdbb2",
+    textMuted: "#928374",
+    surface: "#3c3836",
+    nowPlayingBg: "#1d2021",
+  },
+  "tokyo-night": {
+    accent: "#bb9af7",
+    accentText: "#1a1b26",
+    sidebarBg: "#16161e",
+    sidebarText: "#a9b1d6",
+    contentBg: "#1a1b26",
+    contentText: "#a9b1d6",
+    textMuted: "#565f89",
+    surface: "#24283c",
+    nowPlayingBg: "#16161e",
+  },
+  "one-dark": {
+    accent: "#61afef",
+    accentText: "#282c34",
+    sidebarBg: "#21252b",
+    sidebarText: "#abb2bf",
+    contentBg: "#282c34",
+    contentText: "#abb2bf",
+    textMuted: "#5c6370",
+    surface: "#353b45",
+    nowPlayingBg: "#21252b",
+  },
+  "serika-dark": {
+    accent: "#e2b714",
+    accentText: "#323437",
+    sidebarBg: "#2c2e31",
+    sidebarText: "#d1d0c5",
+    contentBg: "#323437",
+    contentText: "#d1d0c5",
+    textMuted: "#646669",
+    surface: "#3c3e41",
+    nowPlayingBg: "#2c2e31",
+  },
+  cyberspace: {
+    accent: "#00ffcc",
+    accentText: "#181c24",
+    sidebarBg: "#12151c",
+    sidebarText: "#c0caf5",
+    contentBg: "#181c24",
+    contentText: "#c0caf5",
+    textMuted: "#505a70",
+    surface: "#252b36",
+    nowPlayingBg: "#12151c",
+  },
+  "lavender-dark": {
+    accent: "#b0b0e6",
+    accentText: "#2e2e42",
+    sidebarBg: "#242433",
+    sidebarText: "#dcdcdc",
+    contentBg: "#2e2e42",
+    contentText: "#f0f0f0",
+    textMuted: "#69698d",
+    surface: "#3c3c56",
+    nowPlayingBg: "#242433",
+  },
+  matrix: {
+    accent: "#15ff00",
+    accentText: "#000000",
+    sidebarBg: "#000000",
+    sidebarText: "#00ff00",
+    contentBg: "#000000",
+    contentText: "#00ff00",
+    textMuted: "#004d00",
+    surface: "#0d0d0d",
+    nowPlayingBg: "#000000",
+  },
+  "carbon-orange": {
+    accent: "#f66e0d",
+    accentText: "#2b2b2b",
+    sidebarBg: "#212121",
+    sidebarText: "#e3e3e3",
+    contentBg: "#2b2b2b",
+    contentText: "#f5f5f5",
+    textMuted: "#616161",
+    surface: "#3c3c3c",
+    nowPlayingBg: "#212121",
   },
 };
 
