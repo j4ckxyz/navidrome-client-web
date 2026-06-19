@@ -30,6 +30,34 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The recap is a moment — let its parts rise in gently, one after another. */
+@keyframes wrapped-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.wrapped-lede,
+.wrapped-section {
+  animation: wrapped-rise 0.45s var(--ease-out) both;
+}
+.wrapped-lede {
+  animation-delay: 0.04s;
+}
+.wrapped-section:nth-of-type(1) {
+  animation-delay: 0.1s;
+}
+.wrapped-section:nth-of-type(2) {
+  animation-delay: 0.17s;
+}
+.wrapped-section:nth-of-type(3) {
+  animation-delay: 0.24s;
+}
+
 .wrapped-section {
   margin-bottom: 30px;
 }

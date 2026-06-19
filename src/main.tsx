@@ -30,3 +30,10 @@ render(
   ),
   root,
 );
+
+// A quiet hello for anyone who opens the console — no tracking, no telemetry.
+console.log(
+  "%c◉ Navidrome%c  your library, your rules — enjoy the music.",
+  "font-weight:700",
+  "color:#9b9384",
+);

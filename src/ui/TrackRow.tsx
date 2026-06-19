@@ -3,7 +3,7 @@
 // "..." button expose the same actions; the heart toggles the server-side star.
 
 import { useNavigate } from "@solidjs/router";
-import { createMemo, Show } from "solid-js";
+import { createMemo, createSignal, Show } from "solid-js";
 import type { Song } from "~/api/types";
 import { player } from "~/player/store";
 import { settings } from "~/settings/store";
@@ -32,6 +32,17 @@ export function TrackRow(props: TrackRowProps) {
   const navigate = useNavigate();
   const starred = createMemo(() => isStarred(props.song.id, props.song.starred));
   const isCurrent = createMemo(() => player.current()?.id === props.song.id);
+  const [pop, setPop] = createSignal(false);
+
+  // Toggle the star, popping the heart when it becomes a favourite.
+  function star() {
+    const becoming = !starred();
+    toggleStar(props.song.id, props.song.starred, "song");
+    if (becoming) {
+      setPop(true);
+      window.setTimeout(() => setPop(false), 360);
+    }
+  }
 
   function play() {
     if (isCurrent()) {
@@ -131,10 +142,10 @@ export function TrackRow(props: TrackRowProps) {
 
         <button
           class="icon-btn track-star"
-          classList={{ "track-star-on": starred() }}
+          classList={{ "track-star-on": starred(), "heart-pop": pop() }}
           onClick={(e) => {
             e.stopPropagation();
-            toggleStar(props.song.id, props.song.starred, "song");
+            star();
           }}
           aria-label={starred() ? "Remove favourite" : "Favourite"}
         >

@@ -239,6 +239,17 @@ img {
     transform: rotate(360deg);
   }
 }
+
+/* A small, satisfying pop when something becomes a favourite. */
+@keyframes heart-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35); }
+  70% { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+.heart-pop {
+  animation: heart-pop 0.34s var(--ease-out);
+}
 .center-state {
   display: flex;
   flex-direction: column;

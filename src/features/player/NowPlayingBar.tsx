@@ -3,7 +3,7 @@
 // screen, it gets extra attention: live progress, current-track art, star.
 
 import { A } from "@solidjs/router";
-import { createMemo, Show } from "solid-js";
+import { createMemo, createSignal, Show } from "solid-js";
 import { player } from "~/player/store";
 import { settings, updateSettings } from "~/settings/store";
 import { openFullScreen } from "./fullscreen";
@@ -22,6 +22,18 @@ export function NowPlayingBar() {
     if (player.state.volume < 0.5) return "volume-low";
     return "volume";
   });
+
+  const [pop, setPop] = createSignal(false);
+  function starCurrent() {
+    const s = song();
+    if (!s) return;
+    const becoming = !isStarred(s.id, s.starred);
+    toggleStar(s.id, s.starred, "song");
+    if (becoming) {
+      setPop(true);
+      window.setTimeout(() => setPop(false), 360);
+    }
+  }
 
   const sleepItems = (): ActionItem[] => {
     const m = player.sleepMode();
@@ -76,8 +88,8 @@ export function NowPlayingBar() {
           </div>
           <button
             class="icon-btn np-star"
-            classList={{ active: isStarred(song()!.id, song()!.starred) }}
-            onClick={() => toggleStar(song()!.id, song()!.starred, "song")}
+            classList={{ active: isStarred(song()!.id, song()!.starred), "heart-pop": pop() }}
+            onClick={() => starCurrent()}
             aria-label="Favourite"
           >
             <Icon name={isStarred(song()!.id, song()!.starred) ? "heart-filled" : "heart"} size={18} />

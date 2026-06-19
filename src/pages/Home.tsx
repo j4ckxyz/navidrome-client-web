@@ -20,9 +20,13 @@ export function displayName(): string {
 
 function greeting(): string {
   const h = new Date().getHours();
+  // This is a player made for late-night headphone listening, so the small hours
+  // get their own quiet greeting.
+  if (h < 5) return "Late night";
   if (h < 12) return "Good morning";
   if (h < 18) return "Good afternoon";
-  return "Good evening";
+  if (h < 22) return "Good evening";
+  return "Late night";
 }
 
 function Carousel(props: { title: string; type: AlbumListType; href: string }) {
