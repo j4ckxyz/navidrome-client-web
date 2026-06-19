@@ -208,8 +208,18 @@ run(compose[0], [...composeBase, "-f", composeFile, "down", "--remove-orphans"],
   allowFail: true,
 });
 
-// In client-only mode we must NOT touch a separately-managed `navidrome`.
-const stale = fullStack ? ["navidrome-web", "navidrome"] : ["navidrome-web"];
+// Force-remove only containers we positively own (down only touches the current
+// project, so this catches cross-project leftovers). `navidrome-web` is always
+// ours. `navidrome` is ONLY ever removed in full-stack mode AND only when it
+// belongs to our full-stack compose project — never an externally-managed
+// Navidrome that merely shares the name.
+const stale: string[] = ["navidrome-web"];
+if (fullStack && ownedByUs("navidrome", composeFile)) stale.push("navidrome");
+else if (fullStack && containerExists("navidrome")) {
+  console.log(
+    'Note: a "navidrome" container exists but isn\'t part of this stack — leaving it untouched.',
+  );
+}
 for (const name of stale) {
   run("docker", ["rm", "-f", name], { capture: true, allowFail: true });
 }
@@ -228,20 +238,34 @@ function short(hash: string): string {
   return hash ? hash.slice(0, 8) : "unknown";
 }
 
-// Decide which compose file drives this deployment. The most reliable signal is
-// the Compose config-files label on the running web container; fall back to
-// whether a bundled `navidrome` container exists.
+// Decide which compose file drives this deployment, from the Compose config-files
+// label on the web container. We deliberately DEFAULT TO CLIENT-ONLY: full stack
+// is chosen only when positively confirmed, so a client-only deployment that
+// proxies to an externally-managed Navidrome is never mistaken for the bundled
+// stack (which would otherwise try to manage/replace that external container).
 function detectComposeFile(): string {
-  const label = capture("docker", [
+  const label = composeConfigLabel("navidrome-web");
+  return label.includes("docker-compose.full.yml") ? "docker-compose.full.yml" : "docker-compose.yml";
+}
+
+// The Compose "config files" label records which compose file created a
+// container ("" if it isn't Compose-managed).
+function composeConfigLabel(name: string): string {
+  return capture("docker", [
     "inspect",
-    "navidrome-web",
+    name,
     "--format",
     '{{index .Config.Labels "com.docker.compose.project.config_files"}}',
   ]);
-  if (label.includes("docker-compose.full.yml")) return "docker-compose.full.yml";
-  if (label.includes("docker-compose.yml")) return "docker-compose.yml";
+}
 
-  // Fallback: the full stack owns a `navidrome` container (any state).
-  const hasNavidrome = capture("docker", ["ps", "-aq", "-f", "name=^navidrome$"]).length > 0;
-  return hasNavidrome ? "docker-compose.full.yml" : "docker-compose.yml";
+function containerExists(name: string): boolean {
+  return capture("docker", ["ps", "-aq", "-f", `name=^${name}$`]).length > 0;
+}
+
+// True only when the named container was created by OUR compose file — the guard
+// that stops the updater from ever force-removing an external Navidrome.
+function ownedByUs(name: string, composeFile: string): boolean {
+  if (!containerExists(name)) return false;
+  return composeConfigLabel(name).includes(composeFile);
 }
