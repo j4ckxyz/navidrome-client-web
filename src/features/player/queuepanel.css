@@ -26,6 +26,18 @@
   overflow-y: auto;
   padding: 0 10px 16px;
 }
+/* New queue items (and suggestions) ease in as they're added; reordering reuses
+   the same nodes, so it doesn't replay. */
+@keyframes queue-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 .queue-item {
   display: flex;
   align-items: center;
@@ -34,6 +46,7 @@
   border-radius: var(--radius);
   cursor: grab;
   transition: background 0.12s var(--ease-out);
+  animation: queue-item-in 0.22s var(--ease-out) both;
 }
 .queue-item:hover {
   background: var(--surface-hover);
@@ -105,6 +118,7 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent);
+  animation: queue-item-in 0.26s var(--ease-out) both;
 }
 .queue-suggest {
   width: 100%;

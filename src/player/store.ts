@@ -400,11 +400,16 @@ function createPlayer() {
     sleepTimeout = undefined;
   }
 
-  // Pause playback and clear the timer (fired when the sleep deadline hits).
+  // Clear the timer and stop playback when the sleep deadline hits. Playback
+  // fades out gently — unless the user prefers reduced motion, then it just pauses.
   function fireSleep(): void {
     clearSleepTimeout();
     setSleepMode(null);
-    engine.pause();
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) engine.pause();
+    else engine.fadeOutAndPause(5);
   }
 
   // minutes > 0 → pause after that long; "end" → pause when the track finishes;

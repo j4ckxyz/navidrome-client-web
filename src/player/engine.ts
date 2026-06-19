@@ -333,6 +333,29 @@ export class AudioEngine {
     this.activeDeck().el.pause();
   }
 
+  // Gently ramp the active deck to silence over `seconds`, then pause and reset
+  // its element volume so the next play starts at full level. Used by the sleep
+  // timer so playback drifts off rather than cutting out.
+  fadeOutAndPause(seconds = 4): void {
+    const deck = this.activeDeck();
+    if (deck.el.paused) return;
+    const startVol = deck.el.volume;
+    const startTime = performance.now();
+    const durMs = Math.max(200, seconds * 1000);
+    const step = () => {
+      if (deck.el.paused) return; // user intervened
+      const t = Math.min((performance.now() - startTime) / durMs, 1);
+      deck.el.volume = Math.max(0, startVol * (1 - t));
+      if (t < 1) {
+        requestAnimationFrame(step);
+      } else {
+        deck.el.pause();
+        this.applyVolume(deck, 1); // restore intended level for next play
+      }
+    };
+    requestAnimationFrame(step);
+  }
+
   seek(time: number): void {
     const el = this.activeDeck().el;
     if (Number.isFinite(el.duration)) {

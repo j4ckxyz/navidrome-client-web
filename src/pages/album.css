@@ -3,6 +3,18 @@
 .album-page {
   position: relative;
 }
+/* The colours are extracted async, so the backdrop eases in once ready rather
+   than snapping into place. */
+@keyframes album-backdrop-in {
+  from {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+  to {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+}
 .album-backdrop {
   position: absolute;
   top: -22px;
@@ -15,6 +27,7 @@
   pointer-events: none;
   background-size: cover;
   background-position: center;
+  animation: album-backdrop-in 0.7s var(--ease-out) both;
   /* Fade out toward the content so it reads as ambience, not a band of colour. */
   -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.85), transparent);
   mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.85), transparent);
