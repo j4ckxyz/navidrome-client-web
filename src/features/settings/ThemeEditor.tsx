@@ -63,11 +63,54 @@ function ColorField(props: { label: string; value: string; onChange: (hex: strin
 export function ThemeEditor() {
   const effective = createMemo(() => resolveColors(settings.theme));
 
-  function applyPreset(id: Exclude<ThemePreset, "custom">) {
+  const [newPresetName, setNewPresetName] = createSignal("");
+
+  function applyPreset(id: string) {
+    const userPreset = settings.theme.userPresets?.find((p) => p.id === id);
+    if (userPreset) {
+      updateSettings((s) => {
+        s.theme.preset = id;
+        s.theme.colors = { ...userPreset.colors };
+        s.theme.base = userPreset.base;
+      });
+      return;
+    }
+    const stdId = id as Exclude<ThemePreset, "custom">;
+    if (PRESET_COLORS[stdId]) {
+      updateSettings((s) => {
+        s.theme.preset = stdId;
+        s.theme.colors = { ...PRESET_COLORS[stdId] };
+        s.theme.base = stdId === "light" ? "light" : "dark";
+      });
+    }
+  }
+
+  function savePreset(e: Event) {
+    e.preventDefault();
+    const name = newPresetName().trim();
+    if (!name) return;
+    const colors = { ...effective() };
+    const base = settings.theme.preset === "custom" ? settings.theme.base : (settings.theme.preset === "light" ? "light" : "dark");
+    const id = `user-${Date.now()}`;
+    
     updateSettings((s) => {
+      if (!s.theme.userPresets) {
+        s.theme.userPresets = [];
+      }
+      s.theme.userPresets.push({ id, name, colors, base });
       s.theme.preset = id;
-      s.theme.colors = { ...PRESET_COLORS[id] };
-      s.theme.base = id === "light" ? "light" : "dark";
+    });
+    setNewPresetName("");
+  }
+
+  function deletePreset(id: string, e: Event) {
+    e.stopPropagation();
+    updateSettings((s) => {
+      s.theme.userPresets = (s.theme.userPresets || []).filter((p) => p.id !== id);
+      if (s.theme.preset === id) {
+        s.theme.preset = "dark";
+        s.theme.colors = { ...PRESET_COLORS.dark };
+      }
     });
   }
 
@@ -83,7 +126,7 @@ export function ThemeEditor() {
 
   function setColor(region: keyof ThemeColors, hex: string) {
     updateSettings((s) => {
-      if (s.theme.preset !== "custom") {
+      if (s.theme.preset !== "custom" && !s.theme.preset.startsWith("user-")) {
         s.theme.colors = { ...resolveColors(s.theme) };
         s.theme.preset = "custom";
       }
@@ -173,10 +216,18 @@ export function ThemeEditor() {
         <div class="preset-grid">
           <For each={PRESETS}>
             {(p) => (
-              <button
+              <div
                 class="preset-card"
+                role="button"
+                tabindex="0"
                 classList={{ "preset-card-active": settings.theme.preset === p.id }}
                 onClick={() => applyPreset(p.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    applyPreset(p.id);
+                  }
+                }}
               >
                 <div class="preset-swatches">
                   <span style={{ background: PRESET_COLORS[p.id].sidebarBg }} />
@@ -188,10 +239,61 @@ export function ThemeEditor() {
                 <Show when={settings.theme.preset === p.id}>
                   <span class="preset-check"><Icon name="check" size={14} /></span>
                 </Show>
-              </button>
+              </div>
+            )}
+          </For>
+
+          <For each={settings.theme.userPresets || []}>
+            {(p) => (
+              <div
+                class="preset-card"
+                role="button"
+                tabindex="0"
+                classList={{ "preset-card-active": settings.theme.preset === p.id }}
+                onClick={() => applyPreset(p.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    applyPreset(p.id);
+                  }
+                }}
+              >
+                <div class="preset-swatches">
+                  <span style={{ background: p.colors.sidebarBg }} />
+                  <span style={{ background: p.colors.contentBg }} />
+                  <span style={{ background: p.colors.surface }} />
+                  <span style={{ background: p.colors.accent }} />
+                </div>
+                <span class="preset-label">{p.name}</span>
+                <Show when={settings.theme.preset === p.id}>
+                  <span class="preset-check"><Icon name="check" size={14} /></span>
+                </Show>
+                <button
+                  class="preset-card-delete"
+                  onClick={(e) => deletePreset(p.id, e)}
+                  aria-label={`Delete preset ${p.name}`}
+                >
+                  <Icon name="trash" size={12} />
+                </button>
+              </div>
             )}
           </For>
         </div>
+
+        <Show when={settings.theme.preset === "custom"}>
+          <form onSubmit={savePreset} class="save-preset-row">
+            <input
+              class="input preset-name-input"
+              placeholder="Preset name (e.g. Neon)"
+              value={newPresetName()}
+              onInput={(e) => setNewPresetName(e.currentTarget.value)}
+              required
+            />
+            <button class="btn btn-primary" type="submit" disabled={!newPresetName().trim()}>
+              Save preset
+            </button>
+          </form>
+        </Show>
       </div>
 
       <div class="settings-block">

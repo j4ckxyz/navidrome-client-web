@@ -4,7 +4,8 @@
 import { A, useNavigate } from "@solidjs/router";
 import { createQuery } from "@tanstack/solid-query";
 import { createSignal, For, Show } from "solid-js";
-import { client, activeServerUrl, activeUsername, logout } from "~/auth/session";
+import { client, activeServerUrl, activeUsername, logout, isAdmin } from "~/auth/session";
+import { uploadEnabled } from "~/lib/serverConfig";
 import { qk, queryClient } from "~/lib/query";
 import { Icon, type IconName } from "~/ui/Icon";
 import "./sidebar.css";
@@ -17,7 +18,7 @@ const NAV: { href: string; label: string; icon: IconName; end?: boolean }[] = [
   { href: "/favourites", label: "Favourites", icon: "heart" },
 ];
 
-export function Sidebar() {
+export function Sidebar(props: { onUpload?: () => void }) {
   const navigate = useNavigate();
   const [creating, setCreating] = createSignal(false);
   const [newName, setNewName] = createSignal("");
@@ -40,6 +41,7 @@ export function Sidebar() {
 
   return (
     <nav class="sidebar">
+      <div class="sidebar-inner">
       <A href="/" end class="sidebar-brand">
         <span class="sidebar-logo">
           <Icon name="disc" size={22} />
@@ -102,12 +104,23 @@ export function Sidebar() {
             </span>
           </span>
         </button>
-        <A href="/settings" class="icon-btn" aria-label="Settings">
+        <Show when={isAdmin() && uploadEnabled()}>
+          <button
+            class="icon-btn"
+            onClick={props.onUpload}
+            aria-label="Upload music"
+            title="Upload music"
+          >
+            <Icon name="upload" size={19} />
+          </button>
+        </Show>
+        <A href="/settings" class="icon-btn" aria-label="Settings" title="Settings">
           <Icon name="settings" size={19} />
         </A>
-        <button class="icon-btn" onClick={logout} aria-label="Log out">
+        <button class="icon-btn" onClick={logout} aria-label="Log out" title="Log out">
           <Icon name="logout" size={19} />
         </button>
+      </div>
       </div>
     </nav>
   );

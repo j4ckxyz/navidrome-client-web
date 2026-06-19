@@ -86,8 +86,8 @@
   width: 100%;
 }
 .np-time {
+  font-family: var(--font-mono);
   font-size: 11px;
-  font-variant-numeric: tabular-nums;
   width: 38px;
   flex: none;
 }

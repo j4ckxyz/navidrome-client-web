@@ -1,0 +1,169 @@
+.upload-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: grid;
+  place-items: center;
+  z-index: 200;
+  padding: 24px;
+}
+
+.upload-dialog {
+  width: 100%;
+  max-width: 520px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.upload-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.upload-title {
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.upload-drop {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.14s var(--ease-out), background 0.14s var(--ease-out);
+}
+
+.upload-drop:hover,
+.upload-drop-active {
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
+}
+
+.upload-drop-icon {
+  color: var(--text-muted);
+}
+
+.upload-drop-active .upload-drop-icon {
+  color: var(--accent);
+}
+
+.upload-drop-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.upload-drop-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.upload-pickers {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.upload-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.upload-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--content-bg);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.upload-file-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upload-file-size {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.upload-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upload-progress-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.upload-progress-bar {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.upload-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
+.upload-result {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.upload-result-success {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.upload-result-detail {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.upload-result-scan {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.upload-error {
+  font-size: 13px;
+  color: #e06a6a;
+  padding: 10px 13px;
+  background: color-mix(in oklab, #e06a6a 18%, var(--surface));
+  border-radius: var(--radius-sm);
+}
+
+.upload-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}

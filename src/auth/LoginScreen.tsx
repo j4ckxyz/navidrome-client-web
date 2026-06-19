@@ -7,6 +7,7 @@ import { login, switchServer } from "./session";
 import { listKnownServers, loadCredentials } from "~/api/credentials";
 import { ApiError } from "~/api/types";
 import { Icon } from "~/ui/Icon";
+import { proxyMode } from "~/lib/serverConfig";
 import "./login.css";
 
 export function LoginScreen(props: { reauth?: boolean; prefillServer?: string; prefillUser?: string }) {
@@ -29,7 +30,7 @@ export function LoginScreen(props: { reauth?: boolean; prefillServer?: string; p
     setBusy(true);
     try {
       await login({
-        serverUrl: serverUrl(),
+        serverUrl: proxyMode() ? window.location.origin : serverUrl(),
         username: username(),
         password: useToken() ? undefined : password(),
         salt: useToken() ? salt() : undefined,
@@ -60,26 +61,30 @@ export function LoginScreen(props: { reauth?: boolean; prefillServer?: string; p
             <p class="muted">
               {props.reauth
                 ? "Your login expired. Re-enter your password to continue."
-                : "Enter your server details. Everything runs in your browser."}
+                : proxyMode()
+                  ? "Enter your Navidrome username and password."
+                  : "Enter your server details. Everything runs in your browser."}
             </p>
           </div>
         </div>
 
         <form onSubmit={submit} class="login-form">
-          <div class="field">
-            <label for="server">Server URL</label>
-            <input
-              id="server"
-              class="input"
-              type="text"
-              placeholder="https://music.example.com"
-              value={serverUrl()}
-              onInput={(e) => setServerUrl(e.currentTarget.value)}
-              disabled={props.reauth}
-              autocomplete="url"
-              required
-            />
-          </div>
+          <Show when={!proxyMode()}>
+            <div class="field">
+              <label for="server">Server URL</label>
+              <input
+                id="server"
+                class="input"
+                type="text"
+                placeholder="https://music.example.com"
+                value={serverUrl()}
+                onInput={(e) => setServerUrl(e.currentTarget.value)}
+                disabled={props.reauth}
+                autocomplete="url"
+                required={!proxyMode()}
+              />
+            </div>
+          </Show>
 
           <div class="field">
             <label for="username">Username</label>
@@ -162,7 +167,7 @@ export function LoginScreen(props: { reauth?: boolean; prefillServer?: string; p
           </Show>
         </form>
 
-        <Show when={knownServers.length > 0 && !props.reauth}>
+        <Show when={knownServers.length > 0 && !props.reauth && !proxyMode()}>
           <div class="login-known">
             <span class="muted login-known-label">Recent servers</span>
             <For each={knownServers}>
@@ -177,10 +182,12 @@ export function LoginScreen(props: { reauth?: boolean; prefillServer?: string; p
           </div>
         </Show>
 
-        <p class="login-cors muted">
-          If connection fails, your Navidrome server must allow this app's origin (CORS). See the
-          README.
-        </p>
+        <Show when={!proxyMode()}>
+          <p class="login-cors muted">
+            If connection fails, your Navidrome server must allow this app's origin (CORS). See the
+            README.
+          </p>
+        </Show>
       </div>
     </div>
   );

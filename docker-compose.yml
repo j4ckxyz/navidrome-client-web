@@ -1,24 +1,34 @@
-# Navidrome web client — a static, browser-only frontend.
+# Navidrome web client (the client only).
 #
-# There is NO backend service here and NO bind mounts, so this works identically
-# on Windows (Docker Desktop), macOS, and Linux. The Navidrome server URL is
-# entered in the app at login, not baked into the image, so the same image works
-# against any server.
+# Defaults to DIRECT MODE: leave NAVIDROME_URL empty and each user enters their
+# own Navidrome URL at login. Good for hosting one public client for many people.
 #
-# Usage:
-#   docker compose up -d
-#   then open http://localhost:8680 and log in with your Navidrome details.
+# For no-CORS proxying to a single server, set NAVIDROME_URL.
+# For admin uploads, ALSO set MUSIC_DIR and mount the matching music volume
+# (see the commented lines below). Uploads stay OFF until you do both.
+#
+# Full walkthrough for every scenario: ./DEPLOYMENT.md
+# All-in-one stack that also runs Navidrome: ./docker-compose.full.yml
 
 services:
   navidrome-web:
-    # Build locally from the Dockerfile. To use a prebuilt image instead,
-    # comment out `build` and set `image:` to your published tag.
     build: .
     image: navidrome-client-web:latest
     container_name: navidrome-web
     ports:
-      # host:container — change the left side to use a different host port.
-      - "8680:80"
+      - "8680:8080"
+    environment:
+      # Empty = direct mode (users type their own server URL).
+      # Set to proxy to one server (no CORS), e.g.:
+      #   http://host.docker.internal:4533  (same host, Docker Desktop)
+      #   http://navidrome:4533             (same compose network)
+      NAVIDROME_URL: ${NAVIDROME_URL:-}
+
+      # --- Uploads (optional, admin-only) ---
+      # To enable: set NAVIDROME_URL above, set MUSIC_DIR here, AND mount the
+      # SAME folder your Navidrome scans at that path (uncomment the volume).
+      # Leave empty to keep uploads off.
+      MUSIC_DIR: ${MUSIC_DIR:-}
+    # volumes:
+    #   - ${MUSIC_HOST_DIR:-./music}:/music   # host music library : MUSIC_DIR
     restart: unless-stopped
-    # No volumes needed: the app is fully static and stores its own settings in
-    # the browser's localStorage, not on disk.

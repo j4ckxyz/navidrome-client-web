@@ -1,17 +1,30 @@
 .app-shell {
+  --sidebar-w: var(--sidebar-width);
+  position: relative;
   height: 100%;
   display: grid;
   grid-template-areas:
     "sidebar content"
     "nowplaying nowplaying";
-  grid-template-columns: auto 1fr;
+  grid-template-columns: var(--sidebar-w) 1fr;
   grid-template-rows: 1fr auto;
+  transition: grid-template-columns 0.34s var(--ease-out);
 }
 .app-shell-side {
   grid-template-areas:
     "sidebar content side"
     "nowplaying nowplaying nowplaying";
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: var(--sidebar-w) 1fr auto;
+}
+
+/* Collapsed: the sidebar column animates to zero width. The sidebar element
+   itself clips its fixed-width inner content, so nothing reflows. */
+.app-shell-collapsed {
+  --sidebar-w: 0px;
+}
+/* When fully collapsed the clipped sidebar shouldn't catch clicks. */
+.app-shell-collapsed .sidebar {
+  pointer-events: none;
 }
 
 .app-content {
@@ -25,4 +38,70 @@
 .app-scroll {
   flex: 1;
   overflow-y: auto;
+}
+
+/* Edge handle: a thin clickable strip that rides the sidebar/content boundary.
+   Click it to show or hide the sidebar. It sits at left:0 when collapsed. */
+.sidebar-edge {
+  position: absolute;
+  top: 0;
+  bottom: var(--nowplaying-height);
+  left: var(--sidebar-w);
+  width: 12px;
+  transform: translateX(-6px);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: left 0.34s var(--ease-out);
+}
+/* The divider line — replaces the sidebar's old border-right. */
+.sidebar-edge::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 6px;
+  width: 1px;
+  background: var(--border);
+  transition: background 0.16s var(--ease-out), width 0.16s var(--ease-out);
+}
+.sidebar-edge:hover::before {
+  width: 2px;
+  background: color-mix(in oklab, var(--accent) 55%, var(--border));
+}
+.sidebar-edge-chevron {
+  position: relative;
+  z-index: 1;
+  width: 22px;
+  height: 46px;
+  border-radius: 7px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transform: scale(0.88);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+  transition: opacity 0.16s var(--ease-out), transform 0.16s var(--ease-out),
+    color 0.16s var(--ease-out);
+}
+.sidebar-edge:hover .sidebar-edge-chevron,
+.sidebar-edge:focus-visible .sidebar-edge-chevron {
+  opacity: 1;
+  transform: scale(1);
+  color: var(--content-text);
+}
+/* Chevron points left to collapse when open, right to expand when collapsed. */
+.sidebar-edge-chevron svg {
+  transform: rotate(180deg);
+  transition: transform 0.22s var(--ease-out);
+}
+.app-shell-collapsed .sidebar-edge-chevron svg {
+  transform: rotate(0deg);
 }

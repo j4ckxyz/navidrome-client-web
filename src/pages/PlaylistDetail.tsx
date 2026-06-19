@@ -33,6 +33,28 @@ export default function PlaylistDetail() {
   const [name, setName] = createSignal("");
   const [dragIndex, setDragIndex] = createSignal<number | null>(null);
   const [overIndex, setOverIndex] = createSignal<number | null>(null);
+  const [coverBusy, setCoverBusy] = createSignal(false);
+  let coverInput: HTMLInputElement | undefined;
+
+  const canEditCover = () => !!client()?.canEditServerImages;
+
+  async function onPickCover(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ""; // allow re-picking the same file
+    if (!file) return;
+    setCoverBusy(true);
+    try {
+      await client()!.uploadPlaylistImage(params.id, file);
+      // Re-fetch so the new server-side cover (and its art id) loads everywhere.
+      await queryClient.invalidateQueries({ queryKey: qk.playlist(params.id) });
+      queryClient.invalidateQueries({ queryKey: qk.playlists() });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not upload that image.");
+    } finally {
+      setCoverBusy(false);
+    }
+  }
 
   createEffect(() => {
     if (q.data) {
@@ -104,8 +126,28 @@ export default function PlaylistDetail() {
           {(pl) => (
             <>
               <header class="detail-head">
-                <div class="detail-art">
+                <div class="detail-art pl-art">
                   <CoverArt coverArt={pl().coverArt ?? order()[0]?.coverArt} alt={pl().name} />
+                  <Show when={canEditCover()}>
+                    <button
+                      class="pl-art-edit"
+                      onClick={() => coverInput?.click()}
+                      title="Upload a cover photo"
+                      disabled={coverBusy()}
+                    >
+                      <Show when={!coverBusy()} fallback={<span class="spinner" style={{ width: "16px", height: "16px" }} />}>
+                        <Icon name="upload" size={16} />
+                        <span>Cover photo</span>
+                      </Show>
+                    </button>
+                    <input
+                      ref={coverInput}
+                      type="file"
+                      accept="image/png,image/jpeg,image/gif,image/webp"
+                      style={{ display: "none" }}
+                      onChange={onPickCover}
+                    />
+                  </Show>
                 </div>
                 <div class="detail-info">
                   <span class="detail-kind">Playlist</span>
@@ -137,8 +179,20 @@ export default function PlaylistDetail() {
               </header>
 
               <div class="detail-actions">
-                <button class="play-big" onClick={() => player.playNow(order(), 0)} disabled={order().length === 0}>
-                  <Icon name="play" size={20} class="play-big-icon" /> Play
+                <button
+                  class="play-big"
+                  onClick={() => {
+                    const isCurrentPlaylist = order().some(s => s.id === player.current()?.id);
+                    if (isCurrentPlaylist) {
+                      player.togglePlay();
+                    } else {
+                      player.playNow(order(), 0);
+                    }
+                  }}
+                  disabled={order().length === 0}
+                >
+                  <Icon name={player.state.isPlaying && order().some(s => s.id === player.current()?.id) ? "pause" : "play"} size={20} class="play-big-icon" />
+                  {player.state.isPlaying && order().some(s => s.id === player.current()?.id) ? "Pause" : "Play"}
                 </button>
                 <button class="btn" onClick={() => player.playNow([...order()].sort(() => Math.random() - 0.5), 0)} disabled={order().length === 0}>
                   <Icon name="shuffle" size={17} /> Shuffle
@@ -146,8 +200,11 @@ export default function PlaylistDetail() {
                 <MenuButton
                   items={[
                     { label: "Add to queue", icon: "queue", onSelect: () => player.addToQueue(order()) },
-                    { label: "Rename", icon: "edit", onSelect: () => setEditing(true), separatorBefore: true },
-                    { label: "Delete playlist", icon: "trash", onSelect: deletePlaylist, danger: true },
+                    ...(canEditCover()
+                      ? [{ label: "Upload cover photo", icon: "upload" as const, onSelect: () => coverInput?.click(), separatorBefore: true }]
+                      : []),
+                    { label: "Rename", icon: "edit" as const, onSelect: () => setEditing(true), separatorBefore: true },
+                    { label: "Delete playlist", icon: "trash" as const, onSelect: deletePlaylist, danger: true },
                   ]}
                 />
               </div>

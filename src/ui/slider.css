@@ -11,14 +11,16 @@
   border-radius: 999px;
   background: linear-gradient(
     to right,
+    var(--accent) 0%,
     var(--accent) var(--fill, 0%),
-    var(--border) var(--fill, 0%)
+    var(--slider-track) var(--fill, 0%),
+    var(--slider-track) 100%
   );
 }
 .slider::-moz-range-track {
   height: 5px;
   border-radius: 999px;
-  background: var(--border);
+  background: var(--slider-track);
 }
 .slider::-moz-range-progress {
   height: 5px;

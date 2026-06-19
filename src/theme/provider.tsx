@@ -11,13 +11,17 @@ import { adjustL, derivePalette, isDark, readableText } from "./colors";
 // The colors actually in effect, accounting for preset vs custom and simple vs
 // advanced customization.
 export function resolveColors(theme: Settings["theme"]): ThemeColors {
-  if (theme.preset !== "custom") {
-    return PRESET_COLORS[theme.preset];
+  if (theme.preset === "custom") {
+    if (theme.customizationMode === "simple") {
+      return derivePalette(theme.base, theme.colors.accent);
+    }
+    return theme.colors;
   }
-  if (theme.customizationMode === "simple") {
-    return derivePalette(theme.base, theme.colors.accent);
+  const userPreset = theme.userPresets?.find((p) => p.id === theme.preset);
+  if (userPreset) {
+    return userPreset.colors;
   }
-  return theme.colors;
+  return PRESET_COLORS[theme.preset as keyof typeof PRESET_COLORS] || PRESET_COLORS.dark;
 }
 
 const DENSITY_SCALE: Record<Density, { row: string; gap: string; pad: string }> = {
@@ -46,6 +50,7 @@ export function applyTheme(colors: ThemeColors, base: "dark" | "light", density:
   set("--surface-hover", adjustL(colors.surface, dark ? 0.04 : -0.03));
   set("--surface-active", adjustL(colors.surface, dark ? 0.08 : -0.06));
   set("--border", adjustL(colors.surface, dark ? 0.07 : -0.08));
+  set("--slider-track", dark ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)");
   set("--sidebar-text-muted", adjustL(colors.sidebarText, dark ? -0.22 : 0.22));
   set("--on-accent", readableText(colors.accent));
 
@@ -57,11 +62,26 @@ export function applyTheme(colors: ThemeColors, base: "dark" | "light", density:
   // Helps native form controls and scrollbars match.
   root.style.colorScheme = base === "dark" ? "dark" : "light";
   root.dataset.base = base;
+
+  // Update favicon to match the theme setting
+  const onAccent = readableText(colors.accent);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36"><rect width="36" height="36" rx="10" fill="${colors.accent}"/><g transform="translate(7, 7) scale(0.9166666666666666)" fill="none" stroke="${onAccent}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></g></svg>`;
+  const faviconUrl = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+
+  let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+  if (!link) {
+    link = document.createElement("link");
+    link.rel = "icon";
+    link.type = "image/svg+xml";
+    document.head.appendChild(link);
+  }
+  link.href = faviconUrl;
 }
 
 export function ThemeProvider(props: ParentProps) {
   createEffect(() => {
     const colors = resolveColors(settings.theme);
+    const userPreset = settings.theme.userPresets?.find((p) => p.id === settings.theme.preset);
     // Effective base: presets carry their own light/dark feel; for custom we
     // honor the chosen base.
     const base =
@@ -69,9 +89,11 @@ export function ThemeProvider(props: ParentProps) {
         ? "light"
         : settings.theme.preset === "custom"
           ? settings.theme.base
-          : isDark(colors.contentBg)
-            ? "dark"
-            : "light";
+          : userPreset
+            ? userPreset.base
+            : isDark(colors.contentBg)
+              ? "dark"
+              : "light";
     applyTheme(colors, base, settings.layout.density);
     document.documentElement.dataset.cover = settings.layout.coverArtSize;
   });

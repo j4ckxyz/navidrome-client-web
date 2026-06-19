@@ -1,3 +1,37 @@
+/* Playlist cover with a hover-revealed "set custom photo" control. */
+.pl-art {
+  position: relative;
+}
+.pl-art-edit {
+  position: absolute;
+  inset: auto 8px 8px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--now-playing-bg) 78%, transparent);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 550;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.16s var(--ease-out), transform 0.16s var(--ease-out);
+}
+.pl-art:hover .pl-art-edit,
+.pl-art-edit:focus-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.pl-art-edit:hover {
+  background: color-mix(in oklab, var(--now-playing-bg) 90%, transparent);
+}
+.pl-art-edit:disabled {
+  cursor: default;
+}
+
 .pl-rename {
   display: flex;
   gap: 8px;

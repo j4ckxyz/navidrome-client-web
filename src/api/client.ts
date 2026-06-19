@@ -73,11 +73,19 @@ export class SubsonicClient {
   }
 
   streamUrl(id: string, maxBitRate?: number, format?: string): string {
-    return this.buildUrl("stream.view", {
+    // Build stream URL manually so f=json isn't included — stream endpoints
+    // return binary audio regardless, but some servers behave oddly with it.
+    const search = new URLSearchParams({
+      u: this.creds.username,
+      t: this.creds.subsonicToken,
+      s: this.creds.subsonicSalt,
+      v: API_VERSION,
+      c: CLIENT_NAME,
       id,
-      maxBitRate: maxBitRate || undefined,
-      format: format || undefined,
     });
+    if (maxBitRate) search.set("maxBitRate", String(maxBitRate));
+    if (format) search.set("format", format);
+    return `${this.creds.serverUrl}/rest/stream.view?${search.toString()}`;
   }
 
   coverArtUrl(id: string | undefined, size?: number): string {
@@ -359,6 +367,17 @@ export class SubsonicClient {
     return [];
   }
 
+  // Headers for the /upload endpoint: JWT preferred, Subsonic creds as fallback.
+  getUploadAuthHeaders(): Record<string, string> {
+    const h: Record<string, string> = {
+      "x-nd-subsonic-u": this.creds.username,
+      "x-nd-subsonic-t": this.creds.subsonicToken,
+      "x-nd-subsonic-s": this.creds.subsonicSalt,
+    };
+    if (this.creds.jwt) h["x-nd-authorization"] = `Bearer ${this.creds.jwt}`;
+    return h;
+  }
+
   // Raw GET for endpoints we build params for manually (multi-value params).
   private async getRaw(endpoint: string, search: URLSearchParams): Promise<void> {
     const res = await fetch(`${this.creds.serverUrl}/rest/${endpoint}?${search.toString()}`).catch(
@@ -380,6 +399,53 @@ export class SubsonicClient {
   }
 
   // --- Native API (shares): used because Subsonic share support is limited ---
+
+  // Whether this session can use native-API write features (playlist images,
+  // shares). The native API is JWT-only; Subsonic-token logins don't get one.
+  get canEditServerImages(): boolean {
+    return !!this.creds.jwt;
+  }
+
+  // Upload a custom cover image for a playlist via Navidrome's native API.
+  // The image is stored on the server and syncs to every client. Requires a
+  // native (password) login and edit permission on the playlist.
+  async uploadPlaylistImage(id: string, file: File): Promise<void> {
+    if (!this.creds.jwt) {
+      throw new ApiError("Setting a playlist cover needs a password login.");
+    }
+    const form = new FormData();
+    form.append("image", file);
+
+    let res: Response;
+    try {
+      res = await fetch(`${this.creds.serverUrl}/api/playlist/${id}/image`, {
+        method: "POST",
+        headers: { "x-nd-authorization": `Bearer ${this.creds.jwt}` },
+        body: form,
+      });
+    } catch {
+      throw new ApiError("Network error uploading cover");
+    }
+
+    // The native API returns a refreshed JWT on each call.
+    const refreshed = res.headers.get("x-nd-authorization");
+    if (refreshed) {
+      const token = refreshed.replace(/^Bearer\s+/i, "");
+      this.creds.jwt = token;
+      updateJwt(this.creds.serverUrl, token);
+    }
+
+    if (res.status === 401) {
+      this.handleAuthError();
+      throw new ApiError("Authentication expired", 401, true);
+    }
+    if (res.status === 403) {
+      throw new ApiError("You don't have permission to edit this playlist.", 403);
+    }
+    if (!res.ok) {
+      throw new ApiError(`Cover upload failed (HTTP ${res.status})`, res.status);
+    }
+  }
 
   async createShare(ids: string[], description?: string): Promise<string | null> {
     if (!this.creds.jwt) return null;

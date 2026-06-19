@@ -2,7 +2,7 @@
 
 A modern, **desktop-first** web client for [Navidrome](https://www.navidrome.org/). It runs entirely in the browser, talks directly to your existing Navidrome server over its Subsonic/OpenSubsonic and native APIs, and keeps all durable state (playlists, favourites, play counts) **on the server** so it stays in sync with your other clients.
 
-There is **no backend** and **no database**. The app is a static bundle. Everything happens in your browser.
+There is **no database**, and in its simplest form **no backend** — the app is a static bundle and everything happens in your browser. An optional thin proxy server ships in the Docker image to avoid CORS and (for admins) enable uploads; see [Running with Docker](#running-with-docker-recommended).
 
 > Designed for desktop browsers only: wide multi-pane layouts, hover states, right-click context menus, and keyboard shortcuts. Good iOS/Android clients already exist, so mobile layouts are intentionally out of scope.
 
@@ -10,7 +10,7 @@ There is **no backend** and **no database**. The app is a static bundle. Everyth
 
 - **Library browsing** — artists, albums, tracks, genres, plus recently added / recently played / most played.
 - **Server-side search**, debounced.
-- **Playlists** — view, create, rename, reorder (drag), remove tracks, delete. All persisted via the API.
+- **Playlists** — view, create, rename, reorder (drag), remove tracks, delete. All persisted via the API. Upload a **custom cover photo** per playlist (stored on the server via Navidrome's native API, so it syncs to every client).
 - **Favourites / stars** with instant feedback, synced to the server.
 - **Persistent now-playing bar** with full transport, a live seek bar, queue, and volume.
 - **Queue** side panel with drag-to-reorder.
@@ -18,6 +18,7 @@ There is **no backend** and **no database**. The app is a static bundle. Everyth
 - **Album & artist pages** with metadata, cover art, biographies, and similar artists.
 - **Gapless-ish playback, crossfade, and ReplayGain normalization** via the Web Audio API.
 - **Keyboard shortcuts** for playback and navigation — fully rebindable.
+- **Admin music upload** — when deployed alongside your server (see below), admins get an upload button that accepts audio files, whole folders, or a ZIP, writes them into the library, and triggers a scan. All embedded metadata is preserved.
 - **A deep settings system** (see below).
 
 ## The settings system
@@ -33,69 +34,69 @@ Settings live in `localStorage` under `nd:settings`, namespaced separately from 
 - **Power user** — rebindable keyboard shortcuts, next-track prefetch, cover-art cache budget, polling/cache intervals, a **debug panel** that shows raw API responses, and a log level.
 - **Backup** — export/import the full settings as a validated JSON file (credentials are never included), plus reset-to-defaults.
 
-## Running with Docker (recommended)
+## Deploying
 
-Trivially hostable on Windows (Docker Desktop), macOS, and Linux. The image is a single static container (nginx serving the built assets) with no backend process, no bind mounts, and no platform-specific paths.
+The Docker image is a small Bun server. Depending on how you configure it, it runs in one of two modes:
+
+- **Proxy mode** (`NAVIDROME_URL` set) — the server forwards all API/auth calls to one Navidrome server. The browser only ever talks to this app's own origin, so **there is no CORS to configure**. This is the mode that can enable uploads.
+- **Direct mode** (`NAVIDROME_URL` unset) — no proxy. Each user types their own Navidrome URL at login and the browser talks to it directly. Use this to host **one public client that many people point at their own servers**. Uploads are never available in this mode.
+
+> **Full walkthrough for every scenario (great for scripts/agents): [DEPLOYMENT.md](DEPLOYMENT.md).**
+
+### Which setup do I want?
+
+| Your situation | Use | Uploads |
+|----------------|-----|---------|
+| **I host this publicly** for many people, each with their **own** Navidrome | Direct mode (`docker-compose.yml`, leave `NAVIDROME_URL` empty) | ❌ off by design |
+| **Just me / my household**, client + Navidrome on the **same box**, I want to upload music from the browser | All-in-one (`docker-compose.full.yml`) **or** proxy mode + mounted music folder | ✅ admins only |
+| Client and Navidrome on **different machines/containers**, no uploads needed | Proxy mode (`docker-compose.yml`, set `NAVIDROME_URL`) | ❌ |
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `NAVIDROME_URL` | _(empty)_ | Target server to proxy to. **Empty = direct mode** (users enter their own URL). Set = proxy mode (no CORS). |
+| `MUSIC_DIR` | _(empty — uploads off)_ | Path **inside the container** where music lives. To enable the **admin upload** UI you must set this (e.g. `/music`), mount that path to the exact folder your Navidrome scans, **and** have `NAVIDROME_URL` set. Empty keeps uploads off. |
+| `PORT` | `8080` | Port the server listens on. |
+
+Uploads are **off by default** and gated three ways, so a public deployment can't be abused: the operator must explicitly set `MUSIC_DIR` + mount the matching folder, the request must come from a user the **proxied server confirms is an admin**, and direct mode disables the endpoint entirely.
+
+### Quick start
+
+**A) All-in-one (also runs Navidrome) — simplest path to every feature:**
 
 ```bash
+MUSIC_HOST_DIR=/path/to/your/music docker compose -f docker-compose.full.yml up -d
+# open http://localhost:8680 and create your admin account on first login
+```
+
+**B) Alongside an existing Navidrome, with uploads:** uncomment the `volumes:` lines in `docker-compose.yml`, then:
+
+```bash
+NAVIDROME_URL=http://host.docker.internal:4533 \
+MUSIC_DIR=/music \
+MUSIC_HOST_DIR=/path/to/your/music \
 docker compose up -d
 ```
 
-Then open **http://localhost:8680** and log in with your Navidrome server URL, username, and password.
+**C) Public client, users bring their own server (no uploads):**
 
-- Change the host port by editing the `ports` mapping in `docker-compose.yml` (e.g. `"9000:80"`).
-- The Navidrome URL is entered **in the app**, not baked into the image, so the same image works against any server.
-- Settings are stored in your browser, so nothing needs to be persisted on disk — there are no volumes to manage.
+```bash
+docker compose up -d   # NAVIDROME_URL stays empty → direct mode
+```
 
-To build the image directly without compose:
+In direct mode each user's Navidrome must allow this app's origin via **CORS** (or be reverse-proxied behind the same origin). See [DEPLOYMENT.md](DEPLOYMENT.md#direct-mode-cors) for the exact headers and an nginx same-origin example.
+
+To build and run the image by hand:
 
 ```bash
 docker build -t navidrome-client-web .
-docker run -d -p 8680:80 --name navidrome-web navidrome-client-web
+docker run -d -p 8680:8080 \
+  -e NAVIDROME_URL=http://host.docker.internal:4533 \
+  -e MUSIC_DIR=/music \
+  -v /path/to/your/music:/music \
+  --name navidrome-web navidrome-client-web
 ```
-
-## ⚠️ CORS — read this if login fails
-
-Because there is **no backend to proxy through**, your browser calls your Navidrome server directly. The server must therefore allow this app's origin via **CORS**, or the requests will be blocked by the browser (you'll see a network/login error even though your credentials are correct).
-
-You have two options:
-
-### Option A — Reverse-proxy both behind the same origin (simplest, no CORS at all)
-
-Serve this app and Navidrome under the **same scheme + host + port**, e.g. this app at `https://music.example.com/` and Navidrome at `https://music.example.com/` too (Navidrome on a subpath, or this app on a subpath). Same origin means no CORS is involved. Example with nginx:
-
-```nginx
-server {
-    server_name music.example.com;
-
-    # This web client
-    location / {
-        proxy_pass http://navidrome-web:80;
-    }
-
-    # Navidrome API on the same origin
-    location /rest/   { proxy_pass http://navidrome:4533; }
-    location /auth/   { proxy_pass http://navidrome:4533; }
-    location /api/    { proxy_pass http://navidrome:4533; }
-    location /share/  { proxy_pass http://navidrome:4533; }
-}
-```
-
-When proxied this way, enter the **same URL** you're viewing the app from as the server URL at login.
-
-### Option B — Allow this app's origin on Navidrome
-
-If you host them on different origins (e.g. app at `http://localhost:8680`, Navidrome at `http://localhost:4533`), configure Navidrome to send CORS headers permitting the app's origin. If your Navidrome version/reverse-proxy supports adding response headers, the relevant ones are:
-
-```
-Access-Control-Allow-Origin: http://localhost:8680
-Access-Control-Allow-Headers: Content-Type, x-nd-authorization, x-nd-client-unique-id
-Access-Control-Allow-Methods: GET, POST, OPTIONS
-```
-
-If you put a reverse proxy (nginx/Caddy/Traefik) in front of Navidrome, add those headers there and make sure `OPTIONS` preflight requests get a `204`.
-
-> Tip: same-origin (Option A) is the most robust and avoids CORS entirely. Reach for it if you hit trouble.
 
 ## Authentication & privacy
 
@@ -141,4 +142,4 @@ During development you'll hit the same CORS rules above. The easiest dev setup i
 
 ## Out of scope
 
-No backend/API layer, no mobile/PWA layouts, and no library administration (scanning, user management). This is a playback and browsing client, not an admin panel.
+No mobile/PWA layouts, and no broad library administration (user management, library configuration). This is a playback and browsing client, not an admin panel — though admins can upload music and trigger scans when the client is deployed alongside the server (see Docker above).

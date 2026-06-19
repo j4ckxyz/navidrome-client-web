@@ -47,15 +47,6 @@ export function TopBar() {
 
   return (
     <header class="topbar">
-      <div class="topbar-nav">
-        <button class="icon-btn" onClick={() => history.back()} aria-label="Back">
-          <Icon name="chevron-right" size={20} class="flip" />
-        </button>
-        <button class="icon-btn" onClick={() => history.forward()} aria-label="Forward">
-          <Icon name="chevron-right" size={20} />
-        </button>
-      </div>
-
       <div class="topbar-search">
         <Icon name="search" size={18} class="topbar-search-icon" />
         <input

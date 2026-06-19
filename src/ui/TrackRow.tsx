@@ -33,7 +33,9 @@ export function TrackRow(props: TrackRowProps) {
   const isCurrent = createMemo(() => player.current()?.id === props.song.id);
 
   function play() {
-    if (props.context && props.contextIndex !== undefined) {
+    if (isCurrent()) {
+      player.togglePlay();
+    } else if (props.context && props.contextIndex !== undefined) {
       player.playNow(props.context, props.contextIndex);
     } else {
       player.playNow([props.song], 0);
@@ -42,7 +44,7 @@ export function TrackRow(props: TrackRowProps) {
 
   const actions = (): ActionItem[] => {
     const items: ActionItem[] = [
-      { label: "Play", icon: "play", onSelect: play },
+      { label: isCurrent() && player.state.isPlaying ? "Pause" : "Play", icon: isCurrent() && player.state.isPlaying ? "pause" : "play", onSelect: play },
       { label: "Play next", icon: "next", onSelect: () => player.playNext([props.song]) },
       { label: "Add to queue", icon: "queue", onSelect: () => player.addToQueue([props.song]) },
       {
@@ -97,8 +99,8 @@ export function TrackRow(props: TrackRowProps) {
               <i /><i /><i />
             </span>
           </Show>
-          <button class="track-play-overlay" onClick={play} aria-label={`Play ${props.song.title}`}>
-            <Icon name="play" size={15} />
+          <button class="track-play-overlay" onClick={play} aria-label={`${isCurrent() && player.state.isPlaying ? "Pause" : "Play"} ${props.song.title}`}>
+            <Icon name={isCurrent() && player.state.isPlaying ? "pause" : "play"} size={15} />
           </button>
         </div>
 

@@ -16,6 +16,7 @@ export interface ServerCredentials {
   subsonicSalt: string;
   subsonicToken: string;
   jwt?: string; // native JWT, refreshed from response headers
+  isAdmin?: boolean;
   savedAt: number;
 }
 
@@ -126,6 +127,7 @@ export async function loginNative(
     subsonicSalt: data.subsonicSalt,
     subsonicToken: data.subsonicToken,
     jwt: data.token,
+    isAdmin: data.isAdmin,
     savedAt: Date.now(),
   };
 }

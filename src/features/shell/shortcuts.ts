@@ -7,6 +7,7 @@ import { player } from "~/player/store";
 import { settings, updateSettings } from "~/settings/store";
 import { toggleStar } from "~/features/stars";
 import { requestSearchFocus } from "./searchFocus";
+import { setShowShortcuts } from "./ShortcutsHelpDialog";
 import type { ShortcutAction } from "~/settings/schema";
 
 // Normalize a keyboard event into a binding string like "Ctrl+ArrowRight".
@@ -58,6 +59,13 @@ export function installShortcuts(): void {
   const handler = (e: KeyboardEvent) => {
     if (isTypingTarget(e.target)) return;
     const combo = keyFromEvent(e);
+    
+    if (combo === "?" || combo === "Shift+?") {
+      e.preventDefault();
+      setShowShortcuts((v) => !v);
+      return;
+    }
+
     const bindings = settings.power.shortcuts;
     for (const action of Object.keys(bindings) as ShortcutAction[]) {
       if (bindings[action] === combo) {

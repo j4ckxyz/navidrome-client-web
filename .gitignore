@@ -4,3 +4,7 @@ dist
 .DS_Store
 .vite
 bun.lockb
+
+# Docker compose runtime data (from docker-compose.full.yml)
+/nd-data
+/music

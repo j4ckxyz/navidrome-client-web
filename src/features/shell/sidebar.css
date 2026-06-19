@@ -1,12 +1,18 @@
+/* The grid cell is a clipping container; its width is animated by the shell.
+   The inner wrapper keeps a fixed width so content never reflows mid-animation. */
 .sidebar {
   grid-area: sidebar;
+  min-width: 0;
+  overflow: hidden;
+}
+.sidebar-inner {
   width: var(--sidebar-width);
+  height: 100%;
   background: var(--sidebar-bg);
   color: var(--sidebar-text);
   display: flex;
   flex-direction: column;
   padding: 16px 12px;
-  border-right: 1px solid var(--border);
   overflow: hidden;
 }
 

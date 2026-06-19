@@ -1,0 +1,61 @@
+.sh-dialog {
+  max-width: 480px;
+}
+.sh-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sh-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 20px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.sh-group-title {
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.sh-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sh-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+.sh-label {
+  font-size: 13.5px;
+  color: var(--content-text);
+}
+.sh-kbd {
+  font-family: var(--font-mono);
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  padding: 3px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--content-text);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.15);
+}
+.sh-footer {
+  text-align: center;
+  font-size: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.sh-footer .sh-kbd {
+  padding: 1px 5px;
+}

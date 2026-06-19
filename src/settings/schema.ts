@@ -80,14 +80,22 @@ export const SHORTCUT_LABELS: Record<ShortcutAction, string> = {
   starCurrent: "Star current track",
 };
 
+export interface UserPreset {
+  id: string;
+  name: string;
+  colors: ThemeColors;
+  base: "dark" | "light";
+}
+
 export interface Settings {
   version: typeof SETTINGS_VERSION;
 
   theme: {
-    preset: ThemePreset;
+    preset: string; // "dark" | "light" | "midnight" | "warm" | "mono" | "custom" or user preset ID
     customizationMode: CustomizationMode;
     base: "dark" | "light"; // simple-mode base the neutrals derive from
     colors: ThemeColors;
+    userPresets: UserPreset[];
   };
 
   layout: {
@@ -95,6 +103,7 @@ export interface Settings {
     coverArtSize: CoverArtSize;
     showQueuePanel: boolean;
     showLyricsPanel: boolean;
+    showSidebar: boolean;
     defaultLanding: LandingPage;
   };
 
@@ -205,12 +214,14 @@ export const DEFAULT_SETTINGS: Settings = {
     customizationMode: "simple",
     base: "dark",
     colors: DARK_COLORS,
+    userPresets: [],
   },
   layout: {
     density: "comfortable",
     coverArtSize: "medium",
     showQueuePanel: false,
     showLyricsPanel: false,
+    showSidebar: true,
     defaultLanding: "home",
   },
   playback: {

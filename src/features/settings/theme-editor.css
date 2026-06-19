@@ -13,6 +13,7 @@
   background: var(--content-bg);
   border: 1px solid var(--border);
   text-align: left;
+  cursor: pointer;
   transition: border-color 0.14s var(--ease-out), transform 0.14s var(--ease-out);
 }
 .preset-card:hover {
@@ -163,4 +164,42 @@
   color: #e06a6a;
   font-size: 12px;
   margin-top: 6px;
+}
+
+.save-preset-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  max-width: 380px;
+}
+.preset-name-input {
+  flex: 1;
+}
+
+.preset-card-delete {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.14s var(--ease-out), color 0.14s var(--ease-out), background 0.14s var(--ease-out);
+}
+.preset-card:hover .preset-card-delete {
+  opacity: 1;
+}
+.preset-card-delete:hover {
+  background: #e06a6a;
+  color: #fff;
+  border-color: #e06a6a;
+}
+.preset-card-active .preset-card-delete {
+  right: 38px;
 }

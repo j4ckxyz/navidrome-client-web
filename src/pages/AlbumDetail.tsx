@@ -67,8 +67,16 @@ export default function AlbumDetail() {
               </header>
 
               <div class="detail-actions">
-                <button class="play-big" onClick={() => player.playNow(songs(), 0)}>
-                  <Icon name="play" size={20} class="play-big-icon" /> Play
+                <button class="play-big" onClick={() => {
+                  const isCurrentAlbum = songs().some(s => s.id === player.current()?.id);
+                  if (isCurrentAlbum) {
+                    player.togglePlay();
+                  } else {
+                    player.playNow(songs(), 0);
+                  }
+                }}>
+                  <Icon name={player.state.isPlaying && songs().some(s => s.id === player.current()?.id) ? "pause" : "play"} size={20} class="play-big-icon" />
+                  {player.state.isPlaying && songs().some(s => s.id === player.current()?.id) ? "Pause" : "Play"}
                 </button>
                 <button
                   class="icon-btn"

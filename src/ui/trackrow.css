@@ -23,17 +23,19 @@
   place-items: center;
 }
 .track-num {
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: 12px;
   color: var(--text-muted);
 }
 .track-play-overlay {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   opacity: 0;
   color: var(--content-text);
+  z-index: 1;
 }
 .track-row:hover .track-num {
   opacity: 0;
@@ -131,8 +133,8 @@
 .track-duration {
   width: 46px;
   text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 
 .track-more {

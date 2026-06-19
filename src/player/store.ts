@@ -10,6 +10,73 @@ import { client } from "~/auth/session";
 import { settings } from "~/settings/store";
 import { AudioEngine, type DeckTrack } from "./engine";
 
+let supportAudio: HTMLAudioElement | null = null;
+function getSupportAudio(): HTMLAudioElement | null {
+  if (typeof window !== "undefined" && !supportAudio) {
+    try {
+      supportAudio = new Audio();
+    } catch {
+      // ignore
+    }
+  }
+  return supportAudio;
+}
+
+export function isFormatSupported(song: Song): boolean {
+  const suffix = (song.suffix ?? "").toLowerCase();
+  const contentType = (song.contentType ?? "").toLowerCase();
+
+  // Formats known NOT to be supported natively by browsers (Chrome, Firefox, Safari)
+  const unsupportedSuffixes = ["aiff", "aif", "ape", "dsf", "dff", "wma"];
+  if (unsupportedSuffixes.includes(suffix)) {
+    return false;
+  }
+
+  if (
+    contentType.includes("aiff") ||
+    contentType.includes("x-aiff") ||
+    contentType.includes("wma") ||
+    contentType.includes("dsd") ||
+    contentType.includes("ape")
+  ) {
+    return false;
+  }
+
+  const audio = getSupportAudio();
+  if (audio) {
+    if (contentType) {
+      try {
+        const support = audio.canPlayType(contentType);
+        return support === "maybe" || support === "probably";
+      } catch {
+        // fall through
+      }
+    }
+
+    const mimeMap: Record<string, string> = {
+      mp3: "audio/mpeg",
+      m4a: "audio/mp4",
+      aac: "audio/aac",
+      flac: "audio/flac",
+      wav: "audio/wav",
+      ogg: "audio/ogg",
+      opus: "audio/ogg; codecs=opus",
+      webm: "audio/webm",
+    };
+
+    const mime = mimeMap[suffix];
+    if (mime) {
+      try {
+        return audio.canPlayType(mime) !== "";
+      } catch {
+        // fall through
+      }
+    }
+  }
+
+  return true;
+}
+
 export type RepeatMode = "off" | "all" | "one";
 
 interface PlayerState {
@@ -44,8 +111,15 @@ function createPlayer() {
 
   const engine = new AudioEngine({
     onProgress: (time, duration) => {
-      setState({ currentTime: time, duration });
-      maybeScrobble(time, duration);
+      // Transcoded/streamed responses often report a non-finite element
+      // duration, which the engine passes through as 0. Don't let that clobber
+      // the track length we seeded from metadata — only accept a real value.
+      if (duration > 0) {
+        setState({ currentTime: time, duration });
+      } else {
+        setState("currentTime", time);
+      }
+      maybeScrobble(time, duration > 0 ? duration : state.duration);
     },
     onEnded: () => advance(true),
     onPlayingChange: (playing) => setState("isPlaying", playing),
@@ -71,8 +145,9 @@ function createPlayer() {
   function deckTrack(song: Song): DeckTrack {
     const c = client();
     const maxBitRate = settings.playback.maxBitRate || undefined;
+    const format = isFormatSupported(song) ? undefined : "mp3";
     return {
-      url: c ? c.streamUrl(song.id, maxBitRate) : "",
+      url: c ? c.streamUrl(song.id, maxBitRate, format) : "",
       replayGainDb: replayGainDb(song),
       peak:
         settings.playback.replayGain.mode === "album"
@@ -84,7 +159,9 @@ function createPlayer() {
   async function playSongAt(index: number): Promise<void> {
     const song = state.queue[index];
     if (!song) return;
-    setState("index", index);
+    // Seed time + length from metadata immediately so the UI is correct for the
+    // new track before (and even if) the element reports its own duration.
+    setState({ index, currentTime: 0, duration: song.duration ?? 0 });
     setScrobbled(false);
     await engine.play(deckTrack(song));
     notifyNowPlaying(song);
@@ -205,8 +282,15 @@ function createPlayer() {
       if (state.queue.length > 0) void playSongAt(0);
       return;
     }
-    if (state.isPlaying) engine.pause();
-    else engine.resume();
+    if (state.isPlaying) {
+      engine.pause();
+    } else {
+      if (!engine.hasActiveTrack()) {
+        void playSongAt(state.index);
+      } else {
+        engine.resume();
+      }
+    }
   }
 
   function next(): void {
@@ -244,12 +328,12 @@ function createPlayer() {
   function advanceIndexOnly(): void {
     const n = peekNextIndex();
     if (n === null) return;
+    const next = state.queue[n];
     batch(() => {
-      setState("index", n);
+      setState({ index: n, currentTime: 0, duration: next?.duration ?? 0 });
       setScrobbled(false);
     });
-    const song = state.queue[n];
-    if (song) notifyNowPlaying(song);
+    if (next) notifyNowPlaying(next);
     prefetchNext();
   }
 
@@ -337,7 +421,8 @@ function createPlayer() {
       const data = JSON.parse(raw) as { queue: Song[]; index: number };
       if (Array.isArray(data.queue) && data.queue.length > 0) {
         // Load without auto-playing (autoplay needs a gesture anyway).
-        setState({ queue: data.queue, index: Math.max(0, Math.min(data.index, data.queue.length - 1)) });
+        const index = Math.max(0, Math.min(data.index, data.queue.length - 1));
+        setState({ queue: data.queue, index, duration: data.queue[index]?.duration ?? 0, currentTime: 0 });
       }
     } catch {
       // ignore

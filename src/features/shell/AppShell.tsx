@@ -2,7 +2,7 @@
 // bar, optional queue/lyrics side panel, and the persistent now-playing bar.
 // Also installs global keyboard shortcuts and the add-to-playlist dialog.
 
-import { type JSX, onMount, Show } from "solid-js";
+import { createSignal, type JSX, onMount, Show } from "solid-js";
 import { useLocation, useNavigate } from "@solidjs/router";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
@@ -10,7 +10,10 @@ import { NowPlayingBar } from "~/features/player/NowPlayingBar";
 import { QueuePanel } from "~/features/player/QueuePanel";
 import { LyricsPanel } from "~/features/player/LyricsPanel";
 import { AddToPlaylistDialog } from "~/features/playlists/addToPlaylist";
-import { settings } from "~/settings/store";
+import { ShortcutsHelpDialog } from "./ShortcutsHelpDialog";
+import { UploadDialog } from "~/features/upload/UploadDialog";
+import { Icon } from "~/ui/Icon";
+import { settings, updateSettings } from "~/settings/store";
 import { installShortcuts } from "./shortcuts";
 import "./shell.css";
 
@@ -29,6 +32,7 @@ export function AppShell(props: { children?: JSX.Element }) {
   const navigate = useNavigate();
   const location = useLocation();
   const sidePanel = () => settings.layout.showQueuePanel || settings.layout.showLyricsPanel;
+  const [showUpload, setShowUpload] = createSignal(false);
 
   // Honor the configured landing page once on first load.
   onMount(() => {
@@ -39,8 +43,24 @@ export function AppShell(props: { children?: JSX.Element }) {
   });
 
   return (
-    <div class="app-shell" classList={{ "app-shell-side": sidePanel() }}>
-      <Sidebar />
+    <div
+      class="app-shell"
+      classList={{
+        "app-shell-side": sidePanel(),
+        "app-shell-collapsed": !settings.layout.showSidebar,
+      }}
+    >
+      <Sidebar onUpload={() => setShowUpload(true)} />
+      <button
+        class="sidebar-edge"
+        onClick={() => updateSettings((s) => (s.layout.showSidebar = !s.layout.showSidebar))}
+        aria-label={settings.layout.showSidebar ? "Hide sidebar" : "Show sidebar"}
+        title={settings.layout.showSidebar ? "Hide sidebar" : "Show sidebar"}
+      >
+        <span class="sidebar-edge-chevron">
+          <Icon name="chevron-right" size={15} />
+        </span>
+      </button>
       <main class="app-content">
         <TopBar />
         <div class="app-scroll">{props.children}</div>
@@ -53,6 +73,10 @@ export function AppShell(props: { children?: JSX.Element }) {
       </Show>
       <NowPlayingBar />
       <AddToPlaylistDialog />
+      <ShortcutsHelpDialog />
+      <Show when={showUpload()}>
+        <UploadDialog onClose={() => setShowUpload(false)} />
+      </Show>
     </div>
   );
 }

@@ -20,8 +20,9 @@ const [client, setClient] = createSignal<SubsonicClient | null>(null);
 const [reauthRequired, setReauthRequired] = createSignal(false);
 const [activeServerUrl, setActiveServerUrl] = createSignal<string | null>(null);
 const [activeUsername, setActiveUsername] = createSignal<string | null>(null);
+const [isAdmin, setIsAdmin] = createSignal(false);
 
-export { client, reauthRequired, activeServerUrl, activeUsername };
+export { client, reauthRequired, activeServerUrl, activeUsername, isAdmin };
 
 function buildClient(creds: ServerCredentials): SubsonicClient {
   return new SubsonicClient(creds, {
@@ -36,6 +37,7 @@ export function initSession(): void {
     setClient(buildClient(creds));
     setActiveServerUrl(creds.serverUrl);
     setActiveUsername(creds.username);
+    setIsAdmin(creds.isAdmin ?? false);
   }
 }
 
@@ -80,6 +82,7 @@ export async function login(params: LoginParams): Promise<void> {
   setClient(buildClient(creds));
   setActiveServerUrl(creds.serverUrl);
   setActiveUsername(creds.username);
+  setIsAdmin(creds.isAdmin ?? false);
   setReauthRequired(false);
 }
 
@@ -89,6 +92,7 @@ export function switchServer(creds: ServerCredentials): void {
   setClient(buildClient(creds));
   setActiveServerUrl(creds.serverUrl);
   setActiveUsername(creds.username);
+  setIsAdmin(creds.isAdmin ?? false);
   setReauthRequired(false);
 }
 
@@ -98,6 +102,7 @@ export function logout(): void {
   setClient(null);
   setActiveServerUrl(null);
   setActiveUsername(null);
+  setIsAdmin(false);
   setReauthRequired(false);
 }
 

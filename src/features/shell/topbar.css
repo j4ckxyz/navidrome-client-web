@@ -10,14 +10,6 @@
   backdrop-filter: blur(12px);
   border-bottom: 1px solid transparent;
 }
-.topbar-nav {
-  display: flex;
-  gap: 4px;
-}
-.flip {
-  transform: rotate(180deg);
-}
-
 .topbar-search {
   position: relative;
   flex: 1;
