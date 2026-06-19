@@ -227,16 +227,22 @@ From a git checkout of this repo, run:
 bun run update
 ```
 
-This checks GitHub (`origin`) for a newer version and, if there is one, fast-forwards
-your checkout to it **without touching your local `docker-compose*.yml` or `.env`
-files**, so your deployment config is preserved. It then rebuilds and restarts the
-running stack — the full stack (`docker-compose.full.yml`) if the bundled `navidrome`
-container is up, otherwise the client-only stack (`docker-compose.yml`).
+It works in three safe steps:
 
-The command is cross-platform (Windows, macOS, Linux) and works with both Docker
-Compose v2 (`docker compose`) and v1 (`docker-compose`). It's safe to re-run: if
-you're already on the latest commit and the container matches, it exits without
-rebuilding.
+1. **Inspects your setup first** and prints a plan before changing anything. It reads
+   the exact Compose project and compose file that created your running `navidrome-web`
+   container, so it always rebuilds *your* deployment — full stack or client-only —
+   rather than guessing.
+2. **Updates the source** from GitHub (`origin`) if there's a newer version,
+   **without touching your local `docker-compose*.yml` or `.env`** files.
+3. **Rebuilds in place** with `up -d --build` against your own project only.
+
+Because it only ever acts on the project that owns `navidrome-web` and never removes
+a `navidrome` container, it **cannot touch a Navidrome you run separately**, and the
+"container name already in use" conflict is impossible. The command is cross-platform
+(Windows, macOS, Linux) and supports Docker Compose v2 (`docker compose`) and v1
+(`docker-compose`). It's safe to re-run: if you're already on the latest commit and
+the container matches, it exits without rebuilding.
 
 ---
 
