@@ -16,6 +16,17 @@ import { encodeTheme, decodeTheme } from "~/theme/share";
 import { Icon } from "~/ui/Icon";
 import "./theme-editor.css";
 
+const LIGHT_PRESETS = new Set<string>([
+  "light",
+  "apple-music",
+  "palm-greens-light",
+  "summer-vibes",
+  "pastel-peach",
+  "baby-blue",
+  "pastel-pink",
+  "solarized-light",
+]);
+
 const PRESETS: { id: Exclude<ThemePreset, "custom">; label: string }[] = [
   { id: "dark", label: "Dark" },
   { id: "light", label: "Light" },
@@ -24,6 +35,17 @@ const PRESETS: { id: Exclude<ThemePreset, "custom">; label: string }[] = [
   { id: "mono", label: "Mono" },
   { id: "apple-music", label: "Apple Music" },
   { id: "spotify", label: "Spotify" },
+  { id: "catppuccin-mocha", label: "Catppuccin Mocha" },
+  { id: "nord", label: "Nord" },
+  { id: "dracula", label: "Dracula" },
+  { id: "palm-greens", label: "Palm Greens (Dark)" },
+  { id: "palm-greens-light", label: "Palm Greens (Light)" },
+  { id: "summer-vibes", label: "Summer Vibes" },
+  { id: "pastel-peach", label: "Pastel Peach" },
+  { id: "baby-blue", label: "Baby Blue" },
+  { id: "pastel-pink", label: "Pastel Pink" },
+  { id: "solarized-light", label: "Solarized Light" },
+  { id: "cyberpunk", label: "Cyberpunk" },
 ];
 
 function ColorField(props: { label: string; value: string; onChange: (hex: string) => void }) {
@@ -82,7 +104,7 @@ export function ThemeEditor() {
       updateSettings((s) => {
         s.theme.preset = stdId;
         s.theme.colors = { ...PRESET_COLORS[stdId] };
-        s.theme.base = stdId === "light" || stdId === "apple-music" ? "light" : "dark";
+        s.theme.base = LIGHT_PRESETS.has(stdId) ? "light" : "dark";
       });
     }
   }
@@ -92,7 +114,7 @@ export function ThemeEditor() {
     const name = newPresetName().trim();
     if (!name) return;
     const colors = { ...effective() };
-    const base = settings.theme.preset === "custom" ? settings.theme.base : (settings.theme.preset === "light" ? "light" : "dark");
+    const base = settings.theme.preset === "custom" ? settings.theme.base : (LIGHT_PRESETS.has(settings.theme.preset) ? "light" : "dark");
     const id = `user-${Date.now()}`;
     
     updateSettings((s) => {

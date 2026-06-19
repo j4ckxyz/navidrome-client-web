@@ -13,6 +13,17 @@ export type ThemePreset =
   | "apple-music"
   | "apple-music-dark"
   | "spotify"
+  | "catppuccin-mocha"
+  | "nord"
+  | "dracula"
+  | "palm-greens"
+  | "palm-greens-light"
+  | "summer-vibes"
+  | "pastel-peach"
+  | "baby-blue"
+  | "pastel-pink"
+  | "solarized-light"
+  | "cyberpunk"
   | "custom";
 export type CustomizationMode = "simple" | "advanced";
 
@@ -297,6 +308,127 @@ export const PRESET_COLORS: Record<Exclude<ThemePreset, "custom">, ThemeColors> 
     textMuted: "#a7a7a7",
     surface: "#181818",
     nowPlayingBg: "#181818",
+  },
+  "catppuccin-mocha": {
+    accent: "#cba6f7",
+    accentText: "#11111b",
+    sidebarBg: "#181825",
+    sidebarText: "#cdd6f4",
+    contentBg: "#1e1e2e",
+    contentText: "#cdd6f4",
+    textMuted: "#a6adc8",
+    surface: "#313244",
+    nowPlayingBg: "#11111b",
+  },
+  nord: {
+    accent: "#88c0d0",
+    accentText: "#2e3440",
+    sidebarBg: "#2e3440",
+    sidebarText: "#eceff4",
+    contentBg: "#3b4252",
+    contentText: "#eceff4",
+    textMuted: "#d8dee9",
+    surface: "#434c5e",
+    nowPlayingBg: "#2e3440",
+  },
+  dracula: {
+    accent: "#bd93f9",
+    accentText: "#282a36",
+    sidebarBg: "#21222c",
+    sidebarText: "#f8f8f2",
+    contentBg: "#282a36",
+    contentText: "#f8f8f2",
+    textMuted: "#6272a4",
+    surface: "#44475a",
+    nowPlayingBg: "#191a21",
+  },
+  "palm-greens": {
+    accent: "#4ade80",
+    accentText: "#052e16",
+    sidebarBg: "#0a2315",
+    sidebarText: "#d1fae5",
+    contentBg: "#0e301e",
+    contentText: "#f0fdf4",
+    textMuted: "#78b394",
+    surface: "#1b4d32",
+    nowPlayingBg: "#061b0f",
+  },
+  "palm-greens-light": {
+    accent: "#16a34a",
+    accentText: "#ffffff",
+    sidebarBg: "#e8f5e9",
+    sidebarText: "#1b5e20",
+    contentBg: "#f1f8e9",
+    contentText: "#2e7d32",
+    textMuted: "#66bb6a",
+    surface: "#c8e6c9",
+    nowPlayingBg: "#d0e8d2",
+  },
+  "summer-vibes": {
+    accent: "#ff7a59",
+    accentText: "#ffffff",
+    sidebarBg: "#fff4e0",
+    sidebarText: "#4a2711",
+    contentBg: "#fffcf7",
+    contentText: "#3d200f",
+    textMuted: "#a8866f",
+    surface: "#ffe3c2",
+    nowPlayingBg: "#ffd5a6",
+  },
+  "pastel-peach": {
+    accent: "#ffa07a",
+    accentText: "#ffffff",
+    sidebarBg: "#fff5f0",
+    sidebarText: "#704c3e",
+    contentBg: "#fffaf7",
+    contentText: "#4a3229",
+    textMuted: "#bda196",
+    surface: "#ffe3d6",
+    nowPlayingBg: "#ffd3bf",
+  },
+  "baby-blue": {
+    accent: "#90caf9",
+    accentText: "#1a365d",
+    sidebarBg: "#f0f7ff",
+    sidebarText: "#2c5282",
+    contentBg: "#f8fbff",
+    contentText: "#1a252f",
+    textMuted: "#7f9ab5",
+    surface: "#d2e6f9",
+    nowPlayingBg: "#e3f2fd",
+  },
+  "pastel-pink": {
+    accent: "#f48fb1",
+    accentText: "#5d1029",
+    sidebarBg: "#fff0f5",
+    sidebarText: "#782340",
+    contentBg: "#fffcfd",
+    contentText: "#4a1525",
+    textMuted: "#c593a2",
+    surface: "#ffd1dc",
+    nowPlayingBg: "#ffe6ec",
+  },
+  "solarized-light": {
+    accent: "#268bd2",
+    accentText: "#fdf6e3",
+    sidebarBg: "#eee8d5",
+    sidebarText: "#073642",
+    contentBg: "#fdf6e3",
+    contentText: "#586e75",
+    textMuted: "#93a1a1",
+    surface: "#e4dbbe",
+    nowPlayingBg: "#eee8d5",
+  },
+  cyberpunk: {
+    accent: "#ff007f",
+    accentText: "#000000",
+    sidebarBg: "#0a0a14",
+    sidebarText: "#00ffff",
+    contentBg: "#121224",
+    contentText: "#00ffaa",
+    textMuted: "#7a7ab8",
+    surface: "#25254d",
+    nowPlayingBg: "#0a0a14",
   },
 };
 
