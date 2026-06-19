@@ -3,11 +3,11 @@
 }
 
 .menu-content {
-  min-width: 210px;
+  min-width: 172px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 6px;
+  padding: 4px;
   box-shadow: var(--shadow);
   z-index: 100;
   animation: menu-in 0.12s var(--ease-out);
@@ -23,8 +23,8 @@
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: 9px;
+  padding: 6px 9px;
   border-radius: var(--radius-sm);
   font-size: 13px;
   cursor: pointer;
@@ -50,5 +50,5 @@
 .menu-separator {
   height: 1px;
   background: var(--border);
-  margin: 5px 4px;
+  margin: 4px 6px;
 }

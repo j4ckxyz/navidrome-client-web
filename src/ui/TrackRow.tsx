@@ -6,9 +6,10 @@ import { useNavigate } from "@solidjs/router";
 import { createMemo, Show } from "solid-js";
 import type { Song } from "~/api/types";
 import { player } from "~/player/store";
+import { settings } from "~/settings/store";
 import { isStarred, toggleStar } from "~/features/stars";
 import { openAddToPlaylist } from "~/features/playlists/addToPlaylist";
-import { formatDuration } from "~/lib/format";
+import { formatDuration, formatRelativeDate } from "~/lib/format";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
 import { MenuButton, RowContextMenu, type ActionItem } from "./Menu";
@@ -117,6 +118,15 @@ export function TrackRow(props: TrackRowProps) {
 
         <Show when={props.showAlbum}>
           <span class="track-album muted">{props.song.album}</span>
+        </Show>
+
+        <Show when={settings.layout.showPlayCounts && (props.song.playCount ?? 0) > 0}>
+          <span
+            class="track-plays muted"
+            title={props.song.played ? `Last played ${formatRelativeDate(props.song.played)}` : undefined}
+          >
+            {props.song.playCount}&nbsp;<Icon name="play" size={11} />
+          </span>
         </Show>
 
         <button

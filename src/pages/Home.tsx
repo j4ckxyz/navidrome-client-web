@@ -6,11 +6,17 @@ import { createQuery } from "@tanstack/solid-query";
 import { For, Show } from "solid-js";
 import { A } from "@solidjs/router";
 import { client, activeUsername } from "~/auth/session";
+import { settings } from "~/settings/store";
 import { qk } from "~/lib/query";
 import type { AlbumListType } from "~/api/client";
 import { AlbumCard } from "~/ui/AlbumCard";
 import { Icon } from "~/ui/Icon";
 import "./home.css";
+
+// The name to greet with: a user-set display name, else the server username.
+export function displayName(): string {
+  return settings.profile.displayName.trim() || activeUsername() || "";
+}
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -48,7 +54,7 @@ export default function Home() {
     <div class="page">
       <h1 class="page-title home-greeting">
         {greeting()}
-        <Show when={activeUsername()}>, {activeUsername()}</Show>
+        <Show when={displayName()}>, {displayName()}</Show>
       </h1>
       <Carousel title="Recently added" type="newest" href="/albums?sort=newest" />
       <Carousel title="Most played" type="frequent" href="/albums?sort=frequent" />

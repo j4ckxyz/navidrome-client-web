@@ -101,6 +101,11 @@
   padding: 8px 12px;
   font-size: 13px;
 }
+.settings-text {
+  width: 220px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
 
 .settings-range {
   display: flex;

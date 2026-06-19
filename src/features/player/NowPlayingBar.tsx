@@ -11,6 +11,7 @@ import { isStarred, toggleStar } from "~/features/stars";
 import { CoverArt } from "~/ui/CoverArt";
 import { Icon } from "~/ui/Icon";
 import { Slider } from "~/ui/Slider";
+import { MenuButton, type ActionItem } from "~/ui/Menu";
 import { formatDuration } from "~/lib/format";
 import "./nowplaying.css";
 
@@ -21,6 +22,31 @@ export function NowPlayingBar() {
     if (player.state.volume < 0.5) return "volume-low";
     return "volume";
   });
+
+  const sleepItems = (): ActionItem[] => {
+    const m = player.sleepMode();
+    const mk = (label: string, mode: number | "end"): ActionItem => ({
+      label: m === mode ? `${label}  ✓` : label,
+      onSelect: () => player.setSleepTimer(mode),
+    });
+    const items: ActionItem[] = [
+      mk("15 minutes", 15),
+      mk("30 minutes", 30),
+      mk("45 minutes", 45),
+      mk("1 hour", 60),
+      mk("End of track", "end"),
+    ];
+    if (m !== null) {
+      items.push({
+        label: "Turn off",
+        icon: "close",
+        danger: true,
+        separatorBefore: true,
+        onSelect: () => player.setSleepTimer(null),
+      });
+    }
+    return items;
+  };
 
   return (
     <footer class="np-bar" classList={{ "np-empty": !song() }}>
@@ -118,6 +144,13 @@ export function NowPlayingBar() {
         >
           <Icon name="queue" size={18} />
         </button>
+        <MenuButton
+          items={sleepItems()}
+          icon="clock"
+          iconSize={18}
+          label="Sleep timer"
+          class={player.sleepMode() !== null ? "active" : ""}
+        />
         <div class="np-volume">
           <button class="icon-btn" onClick={() => player.toggleMute()} aria-label="Mute">
             <Icon name={volIcon()} size={18} />

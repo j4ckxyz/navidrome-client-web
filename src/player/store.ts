@@ -109,6 +109,11 @@ function createPlayer() {
   // Tracks whether we've submitted a scrobble for the current track yet.
   const [scrobbled, setScrobbled] = createSignal(false);
 
+  // Sleep timer: null = off, "end" = stop when the current track finishes, or a
+  // number = epoch-ms deadline at which playback pauses.
+  const [sleepMode, setSleepMode] = createSignal<null | "end" | number>(null);
+  let sleepTimeout: ReturnType<typeof setTimeout> | undefined;
+
   const engine = new AudioEngine({
     onProgress: (time, duration) => {
       // Transcoded/streamed responses often report a non-finite element
@@ -323,16 +328,83 @@ function createPlayer() {
   // Advance to the next track. `natural` is true when the current track ended on
   // its own (respects repeat-one); false for an explicit skip.
   function advance(natural: boolean): void {
+    // Sleep timer set to "end of track": stop here instead of advancing.
+    if (natural && sleepMode() === "end") {
+      fireSleep();
+      return;
+    }
     if (natural && state.repeat === "one") {
       void playSongAt(state.index);
       return;
     }
     const n = peekNextIndex();
     if (n === null) {
+      // Queue exhausted: optionally keep going with similar tracks (autoplay).
+      if (natural && settings.playback.autoplay) {
+        void autoplayContinue();
+        return;
+      }
       stop();
       return;
     }
     void playSongAt(n);
+  }
+
+  // Autoplay "radio": when the queue runs out, append tracks similar to the last
+  // one played and continue. No-op (stops) if the server returns nothing.
+  async function autoplayContinue(): Promise<void> {
+    const seed = current();
+    const c = client();
+    if (!seed || !c) {
+      stop();
+      return;
+    }
+    try {
+      const similar = await c.getSimilarSongs(seed.id, 25);
+      const existing = new Set(state.queue.map((s) => s.id));
+      const fresh = similar.filter((s) => !existing.has(s.id));
+      if (fresh.length === 0) {
+        stop();
+        return;
+      }
+      const at = state.queue.length;
+      setState("queue", (q) => [...q, ...fresh]);
+      persistQueue();
+      void playSongAt(at);
+    } catch {
+      stop();
+    }
+  }
+
+  // --- Sleep timer ---
+
+  function clearSleepTimeout(): void {
+    if (sleepTimeout) clearTimeout(sleepTimeout);
+    sleepTimeout = undefined;
+  }
+
+  // Pause playback and clear the timer (fired when the sleep deadline hits).
+  function fireSleep(): void {
+    clearSleepTimeout();
+    setSleepMode(null);
+    engine.pause();
+  }
+
+  // minutes > 0 → pause after that long; "end" → pause when the track finishes;
+  // null → cancel.
+  function setSleepTimer(mode: number | "end" | null): void {
+    clearSleepTimeout();
+    if (mode === null) {
+      setSleepMode(null);
+      return;
+    }
+    if (mode === "end") {
+      setSleepMode("end");
+      return;
+    }
+    const ms = mode * 60_000;
+    setSleepMode(Date.now() + ms);
+    sleepTimeout = setTimeout(fireSleep, ms);
   }
 
   // Used when a crossfade has already started audio for the next track: move the
@@ -465,6 +537,8 @@ function createPlayer() {
     syncCrossfade: () => engine.setCrossfade(settings.playback.crossfadeSeconds),
     syncEqualizer,
     equalizerAvailable: () => engine.isEqualizerAvailable(),
+    sleepMode,
+    setSleepTimer,
   };
 }
 

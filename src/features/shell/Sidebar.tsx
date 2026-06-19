@@ -16,6 +16,7 @@ const NAV: { href: string; label: string; icon: IconName; end?: boolean }[] = [
   { href: "/artists", label: "Artists", icon: "mic" },
   { href: "/genres", label: "Genres", icon: "tag" },
   { href: "/favourites", label: "Favourites", icon: "heart" },
+  { href: "/recap", label: "Recap", icon: "trending" },
 ];
 
 export function Sidebar(props: { onUpload?: () => void }) {

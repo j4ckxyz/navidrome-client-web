@@ -18,6 +18,7 @@ const ArtistDetail = lazy(() => import("~/pages/ArtistDetail"));
 const PlaylistDetail = lazy(() => import("~/pages/PlaylistDetail"));
 const Search = lazy(() => import("~/pages/Search"));
 const Settings = lazy(() => import("~/pages/Settings"));
+const Wrapped = lazy(() => import("~/pages/Wrapped"));
 
 export function App() {
   return (
@@ -42,6 +43,7 @@ export function App() {
         <Route path="/artist/:id" component={ArtistDetail} />
         <Route path="/playlist/:id" component={PlaylistDetail} />
         <Route path="/search" component={Search} />
+        <Route path="/recap" component={Wrapped} />
         <Route path="/settings" component={Settings} />
         <Route path="*" component={Home} />
       </Router>

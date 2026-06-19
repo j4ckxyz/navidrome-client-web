@@ -32,6 +32,21 @@ export function Toggle(props: { checked: boolean; onChange: (v: boolean) => void
   );
 }
 
+export function TextField(props: {
+  value: string;
+  placeholder?: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <input
+      class="input settings-text"
+      value={props.value}
+      placeholder={props.placeholder}
+      onInput={(e) => props.onChange(e.currentTarget.value)}
+    />
+  );
+}
+
 export function SelectField<T extends string>(props: {
   value: T;
   options: { value: T; label: string }[];

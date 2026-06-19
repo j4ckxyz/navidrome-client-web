@@ -1,7 +1,7 @@
 .card {
   display: block;
-  border-radius: var(--radius-lg);
-  padding: 10px;
+  border-radius: var(--radius);
+  padding: 8px;
   transition: background 0.16s var(--ease-out);
 }
 .card:hover {
@@ -10,18 +10,18 @@
 
 .card-art {
   position: relative;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 .card-art .cover {
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.22);
 }
 
 .card-play {
   position: absolute;
-  bottom: 10px;
-  right: 10px;
-  width: 46px;
-  height: 46px;
+  bottom: 8px;
+  right: 8px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -44,7 +44,7 @@
 .card-meta {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 .card-meta-center {
@@ -52,7 +52,7 @@
   text-align: center;
 }
 .card-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 550;
   white-space: nowrap;
   overflow: hidden;
@@ -65,25 +65,34 @@
   text-overflow: ellipsis;
 }
 
-/* Responsive auto-fill grid; cover size nudged by the layout density setting. */
+/* Responsive auto-fill grid; cover size nudged by the layout density setting.
+   --card-min is the smallest a tile gets; --card-max caps it so albums are
+   never huge on wide screens. */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--card-min, 168px), 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-min, 150px), 1fr));
+  gap: 6px;
+}
+:root {
+  --card-min: 150px;
+  --card-max: 184px;
 }
 :root[data-cover="small"] {
-  --card-min: 140px;
+  --card-min: 128px;
+  --card-max: 156px;
 }
 :root[data-cover="large"] {
-  --card-min: 210px;
+  --card-min: 178px;
+  --card-max: 220px;
 }
 
-/* Horizontal scrolling row for home carousels. */
+/* Horizontal scrolling row for home carousels. Fixed-width columns (not 1fr) so
+   tiles never blow up to fill the track when only a few are visible. */
 .carousel {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(var(--card-min, 168px), 1fr);
-  gap: 8px;
+  grid-auto-columns: var(--card-max, 184px);
+  gap: 6px;
   overflow-x: auto;
   padding-bottom: 6px;
   scroll-snap-type: x proximity;

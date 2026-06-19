@@ -133,6 +133,17 @@
   color: var(--accent);
 }
 
+.track-plays {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  width: 52px;
+  justify-content: flex-end;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  opacity: 0.8;
+}
+
 .track-duration {
   width: 46px;
   text-align: right;

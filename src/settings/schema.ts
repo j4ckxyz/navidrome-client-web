@@ -143,6 +143,10 @@ export interface UserPreset {
 export interface Settings {
   version: typeof SETTINGS_VERSION;
 
+  profile: {
+    displayName: string; // overrides the server username in greetings; "" = use username
+  };
+
   theme: {
     preset: string; // "dark" | "light" | "midnight" | "warm" | "mono" | "custom" or user preset ID
     customizationMode: CustomizationMode;
@@ -158,6 +162,7 @@ export interface Settings {
     showLyricsPanel: boolean;
     showSidebar: boolean;
     defaultLanding: LandingPage;
+    showPlayCounts: boolean; // show play counts in track lists
   };
 
   playback: {
@@ -169,6 +174,7 @@ export interface Settings {
     resumeQueueOnLaunch: boolean;
     maxBitRate: number; // 0 = original
     equalizer: EqualizerSettings;
+    autoplay: boolean; // when the queue ends, keep playing similar tracks
   };
 
   power: {
@@ -296,6 +302,9 @@ export const PRESET_COLORS: Record<Exclude<ThemePreset, "custom">, ThemeColors> 
 
 export const DEFAULT_SETTINGS: Settings = {
   version: SETTINGS_VERSION,
+  profile: {
+    displayName: "",
+  },
   theme: {
     preset: "midnight",
     customizationMode: "simple",
@@ -310,6 +319,7 @@ export const DEFAULT_SETTINGS: Settings = {
     showLyricsPanel: false,
     showSidebar: true,
     defaultLanding: "home",
+    showPlayCounts: true,
   },
   playback: {
     defaultVolume: 80,
@@ -326,6 +336,7 @@ export const DEFAULT_SETTINGS: Settings = {
       gains: [...EQ_PRESETS[0].gains],
       userPresets: [],
     },
+    autoplay: true,
   },
   power: {
     shortcuts: { ...DEFAULT_SHORTCUTS },

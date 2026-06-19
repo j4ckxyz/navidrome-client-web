@@ -28,6 +28,7 @@ export interface Album {
   starred?: string;
   created?: string;
   playCount?: number;
+  played?: string; // OpenSubsonic: last-played timestamp
   userRating?: number;
 }
 
@@ -56,6 +57,7 @@ export interface Song {
   path?: string;
   starred?: string;
   playCount?: number;
+  played?: string; // OpenSubsonic: last-played timestamp
   userRating?: number;
   // ReplayGain data from OpenSubsonic, used for normalization.
   replayGain?: {

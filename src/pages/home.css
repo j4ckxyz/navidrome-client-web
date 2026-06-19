@@ -1,14 +1,14 @@
 .home-greeting {
-  margin-bottom: 28px;
+  margin-bottom: 22px;
 }
 .home-section {
-  margin-bottom: 34px;
+  margin-bottom: 26px;
 }
 .home-section-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 .home-seeall {
   display: inline-flex;

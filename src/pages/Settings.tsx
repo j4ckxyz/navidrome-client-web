@@ -4,11 +4,12 @@
 
 import { createSignal, Show } from "solid-js";
 import { settings, updateSettings, resetSettings, exportSettings, importSettings } from "~/settings/store";
+import { activeUsername } from "~/auth/session";
 import { player } from "~/player/store";
 import { ThemeEditor } from "~/features/settings/ThemeEditor";
 import { EqualizerEditor } from "~/features/settings/EqualizerEditor";
 import { ShortcutsEditor } from "~/features/settings/ShortcutsEditor";
-import { Row, Toggle, SelectField, RangeField } from "~/features/settings/controls";
+import { Row, Toggle, SelectField, RangeField, TextField } from "~/features/settings/controls";
 import { DebugPanel } from "~/features/settings/DebugPanel";
 import { Icon } from "~/ui/Icon";
 import "./settings.css";
@@ -73,6 +74,17 @@ export default function Settings() {
           {/* Layout */}
           <Show when={tab() === "layout"}>
             <div class="settings-block">
+              <h3 class="settings-block-title">Profile</h3>
+              <Row label="Your name" hint="Shown in the greeting; leave blank to use your username">
+                <TextField
+                  value={settings.profile.displayName}
+                  placeholder={activeUsername() ?? "Your name"}
+                  onChange={(v) => updateSettings((s) => (s.profile.displayName = v))}
+                />
+              </Row>
+            </div>
+
+            <div class="settings-block">
               <h3 class="settings-block-title">Layout</h3>
               <Row label="Density" hint="Row height and spacing throughout the app">
                 <SelectField
@@ -123,6 +135,13 @@ export default function Settings() {
                   onChange={(v) => updateSettings((s) => (s.layout.showLyricsPanel = v))}
                 />
               </Row>
+              <Row label="Show play counts" hint="Show how many times each track has been played in lists">
+                <Toggle
+                  label="Show play counts"
+                  checked={settings.layout.showPlayCounts}
+                  onChange={(v) => updateSettings((s) => (s.layout.showPlayCounts = v))}
+                />
+              </Row>
             </div>
           </Show>
 
@@ -156,6 +175,13 @@ export default function Settings() {
                   label="Gapless"
                   checked={settings.playback.gapless}
                   onChange={(v) => updateSettings((s) => (s.playback.gapless = v))}
+                />
+              </Row>
+              <Row label="Autoplay" hint="When the queue ends, keep playing similar tracks">
+                <Toggle
+                  label="Autoplay"
+                  checked={settings.playback.autoplay}
+                  onChange={(v) => updateSettings((s) => (s.playback.autoplay = v))}
                 />
               </Row>
               <Row label="Scrobble plays" hint="Report play counts and now-playing to the server">

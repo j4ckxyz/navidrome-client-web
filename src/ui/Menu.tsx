@@ -33,7 +33,7 @@ function renderItems<T extends { Item: any; Separator: any }>(
             disabled={item.disabled}
           >
             <Show when={item.icon}>
-              <Icon name={item.icon!} size={16} />
+              <Icon name={item.icon!} size={15} />
             </Show>
             <span>{item.label}</span>
           </api.Item>
@@ -43,14 +43,20 @@ function renderItems<T extends { Item: any; Separator: any }>(
   );
 }
 
-export function MenuButton(props: { items: ActionItem[]; label?: string; class?: string }) {
+export function MenuButton(props: {
+  items: ActionItem[];
+  label?: string;
+  class?: string;
+  icon?: IconName;
+  iconSize?: number;
+}) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger
         class={`icon-btn menu-trigger ${props.class ?? ""}`}
         aria-label={props.label ?? "More actions"}
       >
-        <Icon name="more" size={18} />
+        <Icon name={props.icon ?? "more"} size={props.iconSize ?? 18} />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="menu-content">
