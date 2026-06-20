@@ -113,6 +113,29 @@ export function isDark(hex: string): boolean {
   return rgbToOklch(hexToRgb(hex)).l < 0.5;
 }
 
+// Semantic colors (danger / warning / success). Unlike the neutrals these keep
+// fixed hues — a red error must stay red on a green theme — but their lightness
+// and chroma are tuned per base so they read clearly and hold AA contrast
+// against the content background. Soft background washes are mixed in CSS via
+// color-mix, so we only emit the solid colors here plus on-danger for fills.
+export interface SemanticColors {
+  danger: string;
+  onDanger: string;
+  warning: string;
+  success: string;
+}
+
+export function deriveSemantics(base: "dark" | "light"): SemanticColors {
+  // Hues: red ~25, amber ~75, green ~150.
+  const danger = base === "dark" ? oklch(0.68, 0.16, 25) : oklch(0.52, 0.18, 25);
+  return {
+    danger,
+    onDanger: readableText(danger),
+    warning: base === "dark" ? oklch(0.78, 0.14, 75) : oklch(0.56, 0.13, 75),
+    success: base === "dark" ? oklch(0.74, 0.14, 150) : oklch(0.5, 0.13, 150),
+  };
+}
+
 // Simple-mode derivation: build all nine regions from a base + accent.
 export function derivePalette(base: "dark" | "light", accentHex: string): ThemeColors {
   const accent = rgbToOklch(hexToRgb(accentHex));

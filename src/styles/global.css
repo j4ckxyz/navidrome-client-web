@@ -19,6 +19,12 @@
   --border: #322b21;
   --now-playing-bg: #120f0b;
 
+  /* Semantic colors (fixed hues, base-tuned). ThemeProvider overwrites these. */
+  --danger: oklch(0.68 0.16 25);
+  --on-danger: #1a1714;
+  --warning: oklch(0.78 0.14 75);
+  --success: oklch(0.74 0.14 150);
+
   --row-height: 44px;
   --gap: 14px;
   --pad: 16px;

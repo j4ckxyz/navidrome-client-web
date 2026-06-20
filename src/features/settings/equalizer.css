@@ -20,7 +20,7 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #e06a6a;
+  color: var(--warning);
   margin: 4px 0 12px;
   animation: eq-reveal 0.26s var(--ease-out) both;
 }
@@ -218,6 +218,6 @@
   transition: color 0.14s var(--ease-out), transform 0.14s var(--ease-out);
 }
 .eq-user-chip-del:hover {
-  color: #e06a6a;
+  color: var(--danger);
   transform: rotate(90deg);
 }

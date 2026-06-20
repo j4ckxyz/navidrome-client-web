@@ -71,6 +71,22 @@
   overflow-y: auto;
 }
 
+/* Each route navigation replays a quiet fade + rise. Transform/opacity only,
+   so nothing reflows; reduced-motion is neutralized by the global rule. */
+.route-view {
+  animation: route-in 0.22s var(--ease-out) both;
+}
+@keyframes route-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* Edge handle: a thin clickable strip that rides the sidebar/content boundary.
    Click it to show or hide the sidebar. It sits at left:0 when collapsed. */
 .sidebar-edge {

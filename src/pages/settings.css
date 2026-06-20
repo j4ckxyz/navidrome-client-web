@@ -159,5 +159,5 @@
   color: var(--accent);
 }
 .settings-import-err {
-  color: #e06a6a;
+  color: var(--danger);
 }

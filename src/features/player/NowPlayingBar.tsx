@@ -75,17 +75,21 @@ export function NowPlayingBar() {
               <Icon name="chevron-right" size={18} />
             </span>
           </button>
-          <div class="np-meta">
-            <A href={song()!.albumId ? `/album/${song()!.albumId}` : "#"} class="np-title">
-              {song()!.title}
-            </A>
-            <A
-              href={song()!.artistId ? `/artist/${song()!.artistId}` : "#"}
-              class="np-artist muted"
-            >
-              {song()!.artist}
-            </A>
-          </div>
+          {/* Re-key on the track id so title/artist crossfade in step with the
+              album art when the song changes. */}
+          <Show when={song()!.id} keyed>
+            <div class="np-meta">
+              <A href={song()!.albumId ? `/album/${song()!.albumId}` : "#"} class="np-title">
+                {song()!.title}
+              </A>
+              <A
+                href={song()!.artistId ? `/artist/${song()!.artistId}` : "#"}
+                class="np-artist muted"
+              >
+                {song()!.artist}
+              </A>
+            </div>
+          </Show>
           <button
             class="icon-btn np-star"
             classList={{ active: isStarred(song()!.id, song()!.starred), "heart-pop": pop() }}
