@@ -5,8 +5,10 @@
 
 import { A } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createQuery } from "@tanstack/solid-query";
 import { client } from "~/auth/session";
 import { player } from "~/player/store";
+import { qk } from "~/lib/query";
 import { isStarred, toggleStar } from "~/features/stars";
 import { extractColors, distinctColours } from "~/lib/colorExtract";
 import { closeFullScreen } from "./fullscreen";
@@ -79,6 +81,33 @@ export function FullScreenPlayer() {
     return [s.album, s.year ? String(s.year) : undefined].filter(Boolean).join(" · ");
   });
 
+  // Lyrics, loaded quietly in the background. We only ever surface them here if a
+  // *synced* set with real timestamps comes back; anything else (failure, none,
+  // or plain unsynced text) shows nothing, so the layout never shifts for it.
+  const lyricsQ = createQuery(() => ({
+    queryKey: qk.lyrics(song()?.id ?? ""),
+    queryFn: () => client()!.getLyrics(song()!.id),
+    enabled: !!client() && !!song(),
+    staleTime: 5 * 60 * 1000,
+  }));
+  const syncedLyric = createMemo(() => {
+    const l = (lyricsQ.data ?? []).find((x) => x.synced && x.line.length > 0);
+    return l && l.line.some((ln) => ln.start !== undefined) ? l : undefined;
+  });
+  const activeIdx = createMemo(() => {
+    const l = syncedLyric();
+    if (!l) return -1;
+    const ms = player.state.currentTime * 1000;
+    let idx = -1;
+    for (let i = 0; i < l.line.length; i++) {
+      if ((l.line[i].start ?? 0) <= ms) idx = i;
+      else break;
+    }
+    return idx;
+  });
+  const currentLine = createMemo(() => syncedLyric()?.line[activeIdx()]?.value.trim() ?? "");
+  const nextLine = createMemo(() => syncedLyric()?.line[activeIdx() + 1]?.value.trim() ?? "");
+
   return (
     <div
       class="fs-player"
@@ -145,6 +174,17 @@ export function FullScreenPlayer() {
               <Icon name={isStarred(song()!.id, song()!.starred) ? "heart-filled" : "heart"} size={24} />
             </button>
           </div>
+
+          <Show when={syncedLyric()}>
+            <div class="fs-lyric" aria-hidden="true">
+              <Show when={currentLine()} keyed>
+                <p class="fs-lyric-current">{currentLine()}</p>
+              </Show>
+              <Show when={nextLine()}>
+                <p class="fs-lyric-next">{nextLine()}</p>
+              </Show>
+            </div>
+          </Show>
 
           <div class="fs-seek">
             <span class="fs-time muted">{formatDuration(player.state.currentTime)}</span>

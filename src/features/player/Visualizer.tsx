@@ -81,7 +81,9 @@ export function Visualizer(props: { colors: string[] }) {
 
     const BARS = 64;
     const heights = new Float32Array(BARS); // smoothed bar heights, 0..1
-    let bass = 0; // smoothed low-frequency energy 0..1
+    let bass = 0; // smoothed low-frequency energy 0..1 (sustained swell)
+    let bassAvg = 0; // slow baseline of low end, for transient detection
+    let pulse = 0; // fast kick/onset pulse 0..1 (fast attack, quick decay)
     let waveSm = new Float32Array(0); // smoothed oscilloscope samples
 
     // Fallback detection: if we expect audio but the analyser is flat, switch to
@@ -175,11 +177,25 @@ export function Visualizer(props: { colors: string[] }) {
         const k = target > heights[i] ? 0.45 : 0.12;
         heights[i] = lerp(heights[i], target, k);
       }
+      // Sustained low-end level → a gentle, continuous swell of the artwork.
       bass = lerp(bass, bassRaw, bassRaw > bass ? 0.4 : 0.09);
 
-      // Pulse the album art via a CSS variable on the player root.
+      // Kick / bass-onset detection: a transient is when the instantaneous low
+      // end jumps well above its recent baseline. That feeds a fast-attack,
+      // quick-decay pulse so each kick or bass hit "thumps" the album art,
+      // rather than the art just breathing with the average level.
+      bassAvg = lerp(bassAvg, bassRaw, 0.045); // slow-moving baseline
+      const hit = Math.min(1, Math.max(0, bassRaw - bassAvg * 1.3 - 0.03) * 4.2);
+      pulse = Math.max(pulse * 0.86, hit); // jump up on a hit, else decay fast
+
+      // Drive the artwork: --fs-beat scales the cover (gentle swell + punchy
+      // kick), --fs-beat-glow fades a colored glow behind it on each beat.
       const root = canvas.parentElement;
-      if (root) (root as HTMLElement).style.setProperty("--fs-beat", String(1 + bass * 0.05));
+      if (root) {
+        const el = root as HTMLElement;
+        el.style.setProperty("--fs-beat", (1 + bass * 0.04 + pulse * 0.11).toFixed(4));
+        el.style.setProperty("--fs-beat-glow", pulse.toFixed(4));
+      }
 
       // --- Paint ---
       ctx!.clearRect(0, 0, w, h);
@@ -293,6 +309,7 @@ export function Visualizer(props: { colors: string[] }) {
       cancelAnimationFrame(raf);
       ro.disconnect();
       canvas?.parentElement?.style.removeProperty("--fs-beat");
+      canvas?.parentElement?.style.removeProperty("--fs-beat-glow");
     });
   });
 

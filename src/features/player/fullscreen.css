@@ -111,13 +111,34 @@
 }
 
 .fs-art {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+/* Beat-driven glow that blooms behind the artwork on each kick. Opacity and
+   scale are driven per-frame by the visualizer via --fs-beat-glow (0 at rest),
+   so it pulses with the drums and vanishes when the music does. */
+.fs-art::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(46vh, 440px);
+  height: min(46vh, 440px);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
+  opacity: calc(var(--fs-beat-glow, 0) * 0.55);
+  transform: translate(-50%, -50%) scale(calc(1 + var(--fs-beat-glow, 0) * 0.25));
+  filter: blur(34px);
+  pointer-events: none;
+  z-index: 0;
+}
 .fs-art .fs-cover {
+  position: relative;
+  z-index: 1;
   width: auto;
   height: 100%;
   max-width: 100%;
@@ -125,7 +146,8 @@
   aspect-ratio: 1;
   border-radius: var(--radius-lg);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
-  /* Gentle bass-driven pulse, set per-frame by the visualizer. */
+  /* Bass-driven pulse, set per-frame by the visualizer: a gentle swell with the
+     sustained low end plus a punchy pop on each kick. */
   transform: scale(var(--fs-beat, 1));
   transform-origin: center;
   will-change: transform;
@@ -133,6 +155,9 @@
 @media (prefers-reduced-motion: reduce) {
   .fs-art .fs-cover {
     transform: none;
+  }
+  .fs-art::before {
+    display: none;
   }
 }
 
@@ -183,6 +208,55 @@
 }
 .fs-star.active {
   color: var(--accent);
+}
+
+/* Current synced lyric line, with the upcoming line peeking beneath. Only
+   rendered when synced lyrics exist, so it never reserves space otherwise. */
+.fs-lyric {
+  flex: none;
+  min-height: 3.4em;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  text-align: center;
+  overflow: hidden;
+}
+.fs-lyric-current {
+  font-size: 18px;
+  font-weight: var(--fw-semibold);
+  line-height: 1.3;
+  color: var(--content-text);
+  /* Clamp long lines to two rows so the layout below stays put. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  animation: fs-lyric-in 0.34s var(--ease-out) both;
+}
+.fs-lyric-next {
+  font-size: 14px;
+  line-height: 1.25;
+  color: var(--text-muted);
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@keyframes fs-lyric-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fs-lyric-current {
+    animation: none;
+  }
 }
 
 .fs-seek {
@@ -259,5 +333,11 @@
   }
   .fs-title {
     font-size: 19px;
+  }
+  .fs-lyric {
+    min-height: 3em;
+  }
+  .fs-lyric-current {
+    font-size: 16px;
   }
 }
