@@ -9,6 +9,7 @@ import type { Song } from "~/api/types";
 import { client } from "~/auth/session";
 import { settings } from "~/settings/store";
 import { proxyMode } from "~/lib/serverConfig";
+import { nextRadioBatch } from "~/lib/recommendations";
 import { AudioEngine, type DeckTrack } from "./engine";
 
 let supportAudio: HTMLAudioElement | null = null;
@@ -198,6 +199,7 @@ function createPlayer() {
     if (startAt > 0) engine.seek(startAt);
     notifyNowPlaying(song);
     prefetchNext();
+    void maybeTopUpRadio();
   }
 
   // Preload the upcoming track so gapless/crossfade is ready.
@@ -368,8 +370,9 @@ function createPlayer() {
     void playSongAt(n);
   }
 
-  // Autoplay "radio": when the queue runs out, append tracks similar to the last
-  // one played and continue. No-op (stops) if the server returns nothing.
+  // Infinite radio: when the queue runs out, append tracks similar to the last
+  // one played and continue. With proactive top-up below this rarely fires; it's
+  // the safety net for when a background fetch failed. Stops if nothing's left.
   async function autoplayContinue(): Promise<void> {
     const seed = current();
     const c = client();
@@ -377,20 +380,52 @@ function createPlayer() {
       stop();
       return;
     }
+    const at = state.queue.length;
+    const added = await fetchRadioTracks(seed.id, 25);
+    if (added === 0) {
+      stop();
+      return;
+    }
+    void playSongAt(at);
+  }
+
+  // Guards against overlapping background fetches when several advances land in
+  // quick succession.
+  let radioFetching = false;
+  // Top up before the queue empties: once only this many tracks remain after the
+  // current one, fetch more in the background so playback stays seamless.
+  const RADIO_THRESHOLD = 2;
+
+  // Proactive radio: if infinite radio is on and the queue is nearly exhausted,
+  // append more similar tracks ahead of time. Fire-and-forget; failures are
+  // retried on the next advance.
+  async function maybeTopUpRadio(): Promise<void> {
+    if (!settings.playback.autoplay || radioFetching || state.index < 0) return;
+    const remaining = state.queue.length - 1 - state.index;
+    if (remaining > RADIO_THRESHOLD) return;
+    const seed = state.queue[state.queue.length - 1];
+    if (!seed) return;
+    await fetchRadioTracks(seed.id, 15);
+  }
+
+  // Fetch songs similar to `seedId`, drop ones already queued, apply discovery
+  // filters, append the result, and return how many were added.
+  async function fetchRadioTracks(seedId: string, count: number): Promise<number> {
+    const c = client();
+    if (!c) return 0;
+    radioFetching = true;
     try {
-      const similar = await c.getSimilarSongs(seed.id, 25);
-      const existing = new Set(state.queue.map((s) => s.id));
-      const fresh = similar.filter((s) => !existing.has(s.id));
-      if (fresh.length === 0) {
-        stop();
-        return;
-      }
-      const at = state.queue.length;
+      const similar = await c.getSimilarSongs(seedId, count);
+      const fresh = nextRadioBatch(state.queue, similar);
+      if (fresh.length === 0) return 0;
       setState("queue", (q) => [...q, ...fresh]);
       persistQueue();
-      void playSongAt(at);
+      prefetchNext();
+      return fresh.length;
     } catch {
-      stop();
+      return 0;
+    } finally {
+      radioFetching = false;
     }
   }
 
@@ -442,6 +477,7 @@ function createPlayer() {
     });
     if (next) notifyNowPlaying(next);
     prefetchNext();
+    void maybeTopUpRadio();
   }
 
   function stop(): void {

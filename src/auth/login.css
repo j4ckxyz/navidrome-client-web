@@ -62,8 +62,8 @@
   margin-top: 4px;
 }
 .login-error {
-  background: color-mix(in oklab, #e05252 22%, var(--surface));
-  border: 1px solid color-mix(in oklab, #e05252 50%, var(--surface));
+  background: color-mix(in oklab, var(--danger) 22%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--danger) 50%, var(--surface));
   color: var(--content-text);
   padding: 10px 13px;
   border-radius: var(--radius);

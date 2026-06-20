@@ -6,7 +6,7 @@ import { createEffect, type ParentProps } from "solid-js";
 import { settings } from "~/settings/store";
 import type { Density, Settings, ThemeColors } from "~/settings/schema";
 import { PRESET_COLORS } from "~/settings/schema";
-import { adjustL, derivePalette, isDark, readableText } from "./colors";
+import { adjustL, derivePalette, deriveSemantics, isDark, readableText } from "./colors";
 
 // The colors actually in effect, accounting for preset vs custom and simple vs
 // advanced customization.
@@ -53,6 +53,14 @@ export function applyTheme(colors: ThemeColors, base: "dark" | "light", density:
   set("--slider-track", dark ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)");
   set("--sidebar-text-muted", adjustL(colors.sidebarText, dark ? -0.22 : 0.22));
   set("--on-accent", readableText(colors.accent));
+
+  // Semantic colors: fixed hues, base-tuned lightness, consistent meaning
+  // across every theme.
+  const semantic = deriveSemantics(dark ? "dark" : "light");
+  set("--danger", semantic.danger);
+  set("--on-danger", semantic.onDanger);
+  set("--warning", semantic.warning);
+  set("--success", semantic.success);
 
   const d = DENSITY_SCALE[density];
   set("--row-height", d.row);

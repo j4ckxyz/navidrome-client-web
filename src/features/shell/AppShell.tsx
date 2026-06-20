@@ -67,7 +67,13 @@ export function AppShell(props: { children?: JSX.Element }) {
       </button>
       <main class="app-content">
         <TopBar />
-        <div class="app-scroll">{props.children}</div>
+        <div class="app-scroll">
+          {/* Re-key on the path (not the query) so each navigation replays a
+              quiet entrance, but in-page changes like ?sort= don't. */}
+          <Show when={location.pathname} keyed>
+            <div class="route-view">{props.children}</div>
+          </Show>
+        </div>
       </main>
       <div class="side-panel-wrapper">
         <div

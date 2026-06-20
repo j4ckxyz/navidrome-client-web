@@ -37,11 +37,11 @@
   color: var(--on-accent);
 }
 .menu-item-danger {
-  color: #e06a6a;
+  color: var(--danger);
 }
 .menu-item-danger[data-highlighted] {
-  background: #c0392b;
-  color: #fff;
+  background: var(--danger);
+  color: var(--on-danger);
 }
 .menu-item[data-disabled] {
   opacity: 0.45;

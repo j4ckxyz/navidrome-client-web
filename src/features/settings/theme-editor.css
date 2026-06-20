@@ -192,7 +192,7 @@
   cursor: pointer;
 }
 .share-error {
-  color: #e06a6a;
+  color: var(--danger);
   font-size: 12px;
   margin-top: 6px;
 }
@@ -227,9 +227,9 @@
   opacity: 1;
 }
 .preset-card-delete:hover {
-  background: #e06a6a;
-  color: #fff;
-  border-color: #e06a6a;
+  background: var(--danger);
+  color: var(--on-danger);
+  border-color: var(--danger);
 }
 .preset-card-active .preset-card-delete {
   right: 38px;

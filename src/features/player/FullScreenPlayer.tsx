@@ -5,10 +5,13 @@
 
 import { A } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createQuery } from "@tanstack/solid-query";
 import { client } from "~/auth/session";
 import { player } from "~/player/store";
+import { qk } from "~/lib/query";
 import { isStarred, toggleStar } from "~/features/stars";
 import { extractColors, distinctColours } from "~/lib/colorExtract";
+import { hexToRgb, rgbToOklch, oklch } from "~/theme/colors";
 import { closeFullScreen } from "./fullscreen";
 import { Visualizer } from "./Visualizer";
 import { CoverArt } from "~/ui/CoverArt";
@@ -16,6 +19,27 @@ import { Icon } from "~/ui/Icon";
 import { Slider } from "~/ui/Slider";
 import { formatDuration } from "~/lib/format";
 import "./fullscreen.css";
+
+// Build a two-stop "along the bottom" gradient from the cover's two most
+// distinct colours. Each stop's hue (and a little of its chroma) is kept, but its
+// lightness is forced into the active theme's background band, so the gradient is
+// always recognisably the album's colours yet stays in the same tonal range as
+// --content-bg. That guarantees the white-on-dark (or dark-on-light) player text
+// keeps its contrast on every album, not just lucky ones.
+function coverGradient(cols: string[], dark: boolean): string {
+  if (!cols.length) return "";
+  const stop = (hex: string, l: number, cMax: number) => {
+    const { c, h } = rgbToOklch(hexToRgb(hex));
+    return oklch(l, Math.min(c, cMax), h);
+  };
+  const a = cols[0];
+  const b = cols[1] ?? cols[0];
+  // Lightest stop stays dark enough (dark theme) / light enough (light theme)
+  // that content-text clears WCAG AA against it by a wide margin.
+  const bottom = dark ? stop(a, 0.3, 0.11) : stop(a, 0.9, 0.05);
+  const mid = dark ? stop(b, 0.17, 0.08) : stop(b, 0.97, 0.03);
+  return `linear-gradient(to top, ${bottom} 0%, ${mid} 45%, transparent 85%)`;
+}
 
 export function FullScreenPlayer() {
   const song = createMemo(() => player.current());
@@ -29,22 +53,30 @@ export function FullScreenPlayer() {
     return c && art ? `url("${c.coverArtUrl(art, 600)}")` : "none";
   });
 
-  // Cover-derived palette for the visualizer. Best-effort: needs a CORS-clean
-  // cover (proxy mode / CORS-enabled server); falls back to defaults otherwise.
+  // Cover-derived palette for the visualizer and the bottom gradient. Best-effort:
+  // needs a CORS-clean cover (proxy mode / CORS-enabled server); falls back to
+  // defaults otherwise.
   const [vizColors, setVizColors] = createSignal<string[]>([]);
+  const [gradient, setGradient] = createSignal("");
   createEffect(() => {
     const c = client();
     const art = song()?.coverArt;
     if (!c || !art) {
       setVizColors([]);
+      setGradient("");
       return;
     }
     extractColors(c.coverArtUrl(art, 256))
       .then(({ palette, accent }) => {
         const cols = distinctColours([accent, ...palette], 4);
         setVizColors(cols.length ? cols : []);
+        const dark = document.documentElement.dataset.base !== "light";
+        setGradient(coverGradient(cols.length ? cols : [accent], dark));
       })
-      .catch(() => setVizColors([]));
+      .catch(() => {
+        setVizColors([]);
+        setGradient("");
+      });
   });
 
   const volIcon = createMemo(() => {
@@ -79,6 +111,33 @@ export function FullScreenPlayer() {
     return [s.album, s.year ? String(s.year) : undefined].filter(Boolean).join(" · ");
   });
 
+  // Lyrics, loaded quietly in the background. We only ever surface them here if a
+  // *synced* set with real timestamps comes back; anything else (failure, none,
+  // or plain unsynced text) shows nothing, so the layout never shifts for it.
+  const lyricsQ = createQuery(() => ({
+    queryKey: qk.lyrics(song()?.id ?? ""),
+    queryFn: () => client()!.getLyrics(song()!.id),
+    enabled: !!client() && !!song(),
+    staleTime: 5 * 60 * 1000,
+  }));
+  const syncedLyric = createMemo(() => {
+    const l = (lyricsQ.data ?? []).find((x) => x.synced && x.line.length > 0);
+    return l && l.line.some((ln) => ln.start !== undefined) ? l : undefined;
+  });
+  const activeIdx = createMemo(() => {
+    const l = syncedLyric();
+    if (!l) return -1;
+    const ms = player.state.currentTime * 1000;
+    let idx = -1;
+    for (let i = 0; i < l.line.length; i++) {
+      if ((l.line[i].start ?? 0) <= ms) idx = i;
+      else break;
+    }
+    return idx;
+  });
+  const currentLine = createMemo(() => syncedLyric()?.line[activeIdx()]?.value.trim() ?? "");
+  const nextLine = createMemo(() => syncedLyric()?.line[activeIdx() + 1]?.value.trim() ?? "");
+
   return (
     <div
       class="fs-player"
@@ -89,6 +148,9 @@ export function FullScreenPlayer() {
     >
       <div class="fs-backdrop" style={{ "background-image": backdrop() }} aria-hidden="true" />
       <div class="fs-scrim" aria-hidden="true" />
+      <Show when={gradient()}>
+        <div class="fs-gradient" style={{ "background-image": gradient() }} aria-hidden="true" />
+      </Show>
       <Show when={song()}>
         <Visualizer colors={vizColors()} />
       </Show>
@@ -145,6 +207,17 @@ export function FullScreenPlayer() {
               <Icon name={isStarred(song()!.id, song()!.starred) ? "heart-filled" : "heart"} size={24} />
             </button>
           </div>
+
+          <Show when={syncedLyric()}>
+            <div class="fs-lyric" aria-hidden="true">
+              <Show when={currentLine()} keyed>
+                <p class="fs-lyric-current">{currentLine()}</p>
+              </Show>
+              <Show when={nextLine()}>
+                <p class="fs-lyric-next">{nextLine()}</p>
+              </Show>
+            </div>
+          </Show>
 
           <div class="fs-seek">
             <span class="fs-time muted">{formatDuration(player.state.currentTime)}</span>

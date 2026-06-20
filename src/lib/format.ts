@@ -22,6 +22,17 @@ export function formatCount(n: number, noun: string): string {
   return `${n.toLocaleString()} ${noun}${n === 1 ? "" : "s"}`;
 }
 
+// Human-readable byte size, e.g. "1.2 GB". Uses binary (1024) units to match
+// what disk-usage tools report.
+export function formatBytes(bytes: number | undefined): string {
+  if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / Math.pow(1024, i);
+  // No decimals for plain bytes; one decimal for everything larger.
+  return `${i === 0 ? value : value.toFixed(1)} ${units[i]}`;
+}
+
 export function formatRelativeDate(iso: string | undefined): string {
   if (!iso) return "";
   const date = new Date(iso);

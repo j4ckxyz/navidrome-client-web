@@ -31,6 +31,7 @@ import {
   Server,
   Settings,
   Share2,
+  Sparkles,
   Shuffle,
   SkipBack,
   SkipForward,
@@ -89,7 +90,8 @@ export type IconName =
   | "trash"
   | "grip"
   | "server"
-  | "upload";
+  | "upload"
+  | "sparkles";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LucideComp = Component<any>;
@@ -142,6 +144,7 @@ const LUCIDE_MAP: Record<IconName, LucideComp> = {
   grip: GripVertical,
   server: Server,
   upload: Upload,
+  sparkles: Sparkles,
 };
 
 export interface IconProps {

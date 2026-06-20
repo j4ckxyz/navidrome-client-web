@@ -38,6 +38,15 @@ interface ClientOptions {
   onAuthError?: (creds: ServerCredentials) => void;
 }
 
+export interface LibraryStats {
+  artistCount: number;
+  albumCount: number;
+  songCount: number;
+  // Total size on disk in bytes. Undefined when it couldn't be determined
+  // (Subsonic exposes no size totals; needs Navidrome's native API).
+  totalSize?: number;
+}
+
 export class SubsonicClient {
   constructor(
     private creds: ServerCredentials,
@@ -213,12 +222,29 @@ export class SubsonicClient {
     return data.topSongs?.song ?? [];
   }
 
+  // Songs similar to a seed track, for radio/discovery. Prefers the
+  // OpenSubsonic v2 endpoint and falls back to the legacy getSimilarSongs.view
+  // for servers that predate it (or that return nothing on v2).
   async getSimilarSongs(id: string, count = 50): Promise<Song[]> {
-    const data = await this.get<{ similarSongs2?: { song?: Song[] } }>("getSimilarSongs2.view", {
-      id,
-      count,
-    });
-    return data.similarSongs2?.song ?? [];
+    try {
+      const data = await this.get<{ similarSongs2?: { song?: Song[] } }>("getSimilarSongs2.view", {
+        id,
+        count,
+      });
+      const songs = data.similarSongs2?.song ?? [];
+      if (songs.length > 0) return songs;
+    } catch {
+      // v2 unsupported on this server — fall through to the legacy endpoint.
+    }
+    try {
+      const legacy = await this.get<{ similarSongs?: { song?: Song[] } }>("getSimilarSongs.view", {
+        id,
+        count,
+      });
+      return legacy.similarSongs?.song ?? [];
+    } catch {
+      return [];
+    }
   }
 
   // --- Genres ---
@@ -235,6 +261,83 @@ export class SubsonicClient {
       offset,
     });
     return data.songsByGenre?.song ?? [];
+  }
+
+  // --- Library stats ---
+
+  // Aggregate library totals for the Stats page. Subsonic has no totals
+  // endpoint, so we derive them: artist count from getArtists, and — when a
+  // native (password) login is available — album/song counts and total size by
+  // summing Navidrome's album records, which already carry per-album aggregates.
+  // Falls back to a size-less estimate for Subsonic-token logins.
+  async getLibraryStats(): Promise<LibraryStats> {
+    const artists = await this.getArtists();
+    const artistCount = artists.length;
+
+    if (this.creds.jwt) {
+      try {
+        const totals = await this.nativeAlbumTotals();
+        return { artistCount, ...totals };
+      } catch {
+        // Native API unavailable — fall through to the Subsonic-only estimate.
+      }
+    }
+
+    const albumCount = artists.reduce((sum, a) => sum + (a.albumCount ?? 0), 0);
+    const genres = await this.getGenres();
+    const songCount = genres.reduce((sum, g) => sum + (g.songCount ?? 0), 0);
+    return { artistCount, albumCount, songCount, totalSize: undefined };
+  }
+
+  // Walk Navidrome's native /api/album list, summing songCount and size. Album
+  // records are far fewer than tracks, so this is the cheap way to a true total
+  // library size. Requires a JWT; each response refreshes it.
+  private async nativeAlbumTotals(): Promise<{
+    albumCount: number;
+    songCount: number;
+    totalSize: number;
+  }> {
+    const pageSize = 500;
+    let start = 0;
+    let albumCount = 0;
+    let songCount = 0;
+    let totalSize = 0;
+
+    for (;;) {
+      const url = `${this.creds.serverUrl}/api/album?_start=${start}&_end=${start + pageSize}&_sort=name`;
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          headers: { "x-nd-authorization": `Bearer ${this.creds.jwt}` },
+        });
+      } catch {
+        throw new ApiError("Network error calling /api/album");
+      }
+      if (res.status === 401 || res.status === 403) {
+        this.handleAuthError();
+        throw new ApiError("Authentication expired", res.status, true);
+      }
+      if (!res.ok) throw new ApiError(`HTTP ${res.status} calling /api/album`, res.status);
+
+      const refreshed = res.headers.get("x-nd-authorization");
+      if (refreshed) {
+        const token = refreshed.replace(/^Bearer\s+/i, "");
+        this.creds.jwt = token;
+        updateJwt(this.creds.serverUrl, token);
+      }
+
+      const page = (await res.json()) as Array<{ songCount?: number; size?: number }>;
+      if (!Array.isArray(page) || page.length === 0) break;
+      for (const al of page) {
+        albumCount++;
+        songCount += al.songCount ?? 0;
+        totalSize += al.size ?? 0;
+      }
+      if (page.length < pageSize) break;
+      start += pageSize;
+    }
+
+    return { albumCount, songCount, totalSize };
   }
 
   // --- Starred / ratings ---

@@ -3,6 +3,7 @@
 
 import { client } from "~/auth/session";
 import { player } from "~/player/store";
+import { buildVibeQueue } from "~/lib/recommendations";
 
 export async function playAlbum(albumId: string, shuffle = false): Promise<void> {
   const c = client();
@@ -31,6 +32,20 @@ export async function playArtist(artistId: string, shuffle = false): Promise<voi
     all.push(...full.song);
   }
   player.playNow(shuffle ? shuffled(all) : all, 0);
+}
+
+// Vibe Roulette: anchor a fresh listening session on one random track, then
+// build a cohesive queue from songs similar to it (rather than a chaotic random
+// mix). Returns false when nothing could be generated — empty library, or a
+// server with no similar-songs support. Infinite radio then keeps it going.
+export async function vibeRoulette(): Promise<boolean> {
+  const c = client();
+  if (!c) return false;
+  const [seed] = await c.getRandomSongs(1);
+  if (!seed) return false;
+  const similar = await c.getSimilarSongs(seed.id, 25);
+  player.playNow(buildVibeQueue(seed, similar), 0);
+  return true;
 }
 
 function shuffled<T>(arr: T[]): T[] {

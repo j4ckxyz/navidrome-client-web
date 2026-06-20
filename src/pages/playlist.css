@@ -54,6 +54,11 @@
   align-items: center;
   gap: 4px;
   border-radius: var(--radius);
+  /* Playlists are the one unbounded list (no pagination), so skipping off-screen
+     rows matters most here. Rows remain in the DOM, so dragging to a row keeps
+     working once it scrolls into view. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--row-height);
 }
 .pl-row-over {
   box-shadow: inset 0 2px 0 var(--accent);
