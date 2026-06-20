@@ -73,6 +73,15 @@
   grid-template-columns: repeat(auto-fill, minmax(var(--card-min, 150px), 1fr));
   gap: 6px;
 }
+/* The Albums and Artists grids grow as the user pages in more (50 at a time),
+   so skip rendering tiles below the fold. Scoped to .grid so the horizontal home
+   carousels, which are short and always near-viewport, are unaffected. The
+   intrinsic height (square cover + two text lines) is an estimate; `auto`
+   self-corrects to the real height after first render. */
+.grid > .card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 210px;
+}
 :root {
   --card-min: 150px;
   --card-max: 184px;

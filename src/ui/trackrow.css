@@ -9,6 +9,13 @@
   border-radius: var(--radius);
   transition: background 0.12s var(--ease-out);
   user-select: none;
+  /* Skip layout + paint for rows scrolled out of view. Album, search, and
+     favourites lists can run to thousands of rows; off-screen rows stay in the
+     DOM (so keyboard nav and drag-reorder keep working) but cost almost
+     nothing. contain-intrinsic-size reserves the row height so the scrollbar
+     stays accurate; `auto` remembers the real size once a row has rendered. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--row-height);
 }
 .track-row:hover {
   background: var(--surface-hover);
