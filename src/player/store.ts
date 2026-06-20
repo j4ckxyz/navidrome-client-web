@@ -8,6 +8,7 @@ import { createStore } from "solid-js/store";
 import type { Song } from "~/api/types";
 import { client } from "~/auth/session";
 import { settings } from "~/settings/store";
+import { proxyMode } from "~/lib/serverConfig";
 import { AudioEngine, type DeckTrack } from "./engine";
 
 let supportAudio: HTMLAudioElement | null = null;
@@ -562,6 +563,13 @@ function createPlayer() {
     syncCrossfade: () => engine.setCrossfade(settings.playback.crossfadeSeconds),
     syncEqualizer,
     equalizerAvailable: () => engine.isEqualizerAvailable(),
+    // Build (if needed) and return the master analyser for the visualizer.
+    // Building the graph forces CORS-clean stream reloads, which would break
+    // playback when streams aren't same-origin — so only build it in proxy mode,
+    // or reuse a graph the EQ already built (which proves CORS is fine). When it
+    // returns null the visualizer falls back to a synthesized animation.
+    enableVisualizer: (): AnalyserNode | null =>
+      proxyMode() || engine.getAnalyser() ? engine.enableAnalyser() : null,
     sleepMode,
     setSleepTimer,
   };

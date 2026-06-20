@@ -93,6 +93,20 @@ export class SubsonicClient {
     return this.buildUrl("getCoverArt.view", { id, size: size || undefined });
   }
 
+  // Download the original file/collection. For an album or playlist id Navidrome
+  // returns a ZIP of the original (untranscoded) files; for a song id, the file.
+  downloadUrl(id: string): string {
+    const search = new URLSearchParams({
+      u: this.creds.username,
+      t: this.creds.subsonicToken,
+      s: this.creds.subsonicSalt,
+      v: API_VERSION,
+      c: CLIENT_NAME,
+      id,
+    });
+    return `${this.creds.serverUrl}/rest/download.view?${search.toString()}`;
+  }
+
   private handleAuthError(): void {
     this.opts.onAuthError?.(this.creds);
   }
@@ -290,11 +304,40 @@ export class SubsonicClient {
     return { ...data.playlist, entry: data.playlist.entry ?? [] };
   }
 
-  async createPlaylist(name: string, songIds: string[] = []): Promise<void> {
+  // Create a playlist and return its id. Playlists are made **private** by
+  // default — Navidrome's server-side default can be public, so we explicitly
+  // set visibility after creation rather than trusting it.
+  async createPlaylist(name: string, songIds: string[] = [], isPublic = false): Promise<string | undefined> {
     const search = this.authParams();
     search.set("name", name);
     for (const id of songIds) search.append("songId", id);
-    await this.getRaw("createPlaylist.view", search);
+    const sub = await this.getRaw("createPlaylist.view", search);
+    let id = sub?.playlist?.id as string | undefined;
+    if (!id) {
+      // Some servers return ok without the playlist body. Find what we just made
+      // so privacy can still be enforced (the whole point of this method).
+      try {
+        const mine = (await this.getPlaylists())
+          .filter((p) => p.name === name && (!p.owner || p.owner === this.username))
+          .sort((a, b) => (b.created ?? "").localeCompare(a.created ?? ""));
+        id = mine[0]?.id;
+      } catch {
+        // ignore — fall through with no id
+      }
+    }
+    if (id) {
+      try {
+        await this.updatePlaylist(id, { public: isPublic });
+      } catch {
+        // Non-fatal: the playlist exists; visibility just couldn't be enforced.
+      }
+    }
+    return id;
+  }
+
+  // Toggle a playlist's public/private visibility.
+  async setPlaylistVisibility(id: string, isPublic: boolean): Promise<void> {
+    await this.updatePlaylist(id, { public: isPublic });
   }
 
   async deletePlaylist(id: string): Promise<void> {
@@ -367,8 +410,10 @@ export class SubsonicClient {
     return [];
   }
 
-  // Headers for the /upload endpoint: JWT preferred, Subsonic creds as fallback.
-  getUploadAuthHeaders(): Record<string, string> {
+  // Headers identifying this session to our own backend (/upload, /download/zip):
+  // JWT preferred, Subsonic creds as fallback. The backend re-uses them to call
+  // Navidrome on the user's behalf.
+  getServerAuthHeaders(): Record<string, string> {
     const h: Record<string, string> = {
       "x-nd-subsonic-u": this.creds.username,
       "x-nd-subsonic-t": this.creds.subsonicToken,
@@ -378,8 +423,20 @@ export class SubsonicClient {
     return h;
   }
 
+  // The raw Subsonic auth triplet, for endpoints that take credentials in a
+  // request body (e.g. a form-POST streamed download).
+  get subsonicAuth(): { u: string; t: string; s: string } {
+    return {
+      u: this.creds.username,
+      t: this.creds.subsonicToken,
+      s: this.creds.subsonicSalt,
+    };
+  }
+
   // Raw GET for endpoints we build params for manually (multi-value params).
-  private async getRaw(endpoint: string, search: URLSearchParams): Promise<void> {
+  // Returns the parsed subsonic-response envelope so callers can read results
+  // (e.g. the id of a freshly-created playlist).
+  private async getRaw(endpoint: string, search: URLSearchParams): Promise<any> {
     const res = await fetch(`${this.creds.serverUrl}/rest/${endpoint}?${search.toString()}`).catch(
       () => {
         throw new ApiError(`Network error calling ${endpoint}`);
@@ -396,6 +453,7 @@ export class SubsonicClient {
       if (isAuth) this.handleAuthError();
       throw new ApiError(sub?.error?.message ?? "API error", sub?.error?.code, isAuth);
     }
+    return sub;
   }
 
   // --- Native API (shares): used because Subsonic share support is limited ---

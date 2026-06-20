@@ -12,6 +12,8 @@ import { isFullScreen } from "~/features/player/fullscreen";
 import { QueuePanel } from "~/features/player/QueuePanel";
 import { LyricsPanel } from "~/features/player/LyricsPanel";
 import { AddToPlaylistDialog } from "~/features/playlists/addToPlaylist";
+import { DownloadDialog } from "~/features/download/DownloadDialog";
+import { ShareToast } from "~/features/share/share";
 import { ShortcutsHelpDialog } from "./ShortcutsHelpDialog";
 import { UploadDialog } from "~/features/upload/UploadDialog";
 import { Icon } from "~/ui/Icon";
@@ -90,6 +92,8 @@ export function AppShell(props: { children?: JSX.Element }) {
         <FullScreenPlayer />
       </Show>
       <AddToPlaylistDialog />
+      <DownloadDialog />
+      <ShareToast />
       <ShortcutsHelpDialog />
       <Show when={showUpload()}>
         <UploadDialog onClose={() => setShowUpload(false)} />

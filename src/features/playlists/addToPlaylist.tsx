@@ -34,6 +34,12 @@ export function AddToPlaylistDialog() {
     enabled: !!client(),
   }));
 
+  // Only your own playlists — you can't add tracks to someone else's anyway.
+  const mine = () => {
+    const me = client()?.username;
+    return (playlists.data ?? []).filter((pl) => !me || !pl.owner || pl.owner === me);
+  };
+
   async function addToExisting(id: string, name: string) {
     const ids = pendingIds();
     if (!ids) return;
@@ -95,10 +101,10 @@ export function AddToPlaylistDialog() {
 
               <div class="atp-list">
                 <Show
-                  when={(playlists.data?.length ?? 0) > 0}
+                  when={mine().length > 0}
                   fallback={<p class="muted atp-empty">No playlists yet.</p>}
                 >
-                  <For each={playlists.data}>
+                  <For each={mine()}>
                     {(pl) => (
                       <button
                         class="atp-item"

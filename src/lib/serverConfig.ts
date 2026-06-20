@@ -3,6 +3,7 @@ import { createSignal } from "solid-js";
 export interface ServerConfig {
   proxyMode: boolean;
   uploadEnabled: boolean;
+  linkPreviews?: boolean;
 }
 
 const [config, setConfig] = createSignal<ServerConfig | null>(null);

@@ -108,7 +108,7 @@ export function UploadDialog(props: { onClose: () => void }) {
     const all = files();
     if (all.length === 0) return;
 
-    const authHeaders = client()?.getUploadAuthHeaders() ?? {};
+    const authHeaders = client()?.getServerAuthHeaders() ?? {};
     setPhase("uploading");
     setError(null);
     setResult(null);

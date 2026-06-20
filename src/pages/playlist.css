@@ -74,3 +74,33 @@
   flex: 1;
   min-width: 0;
 }
+
+/* Visibility toggle pill in the playlist header. Lock = private (only you),
+   globe = public (everyone on the server). */
+.pl-visibility {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2, rgba(127, 127, 127, 0.08));
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.14s, color 0.14s, background 0.14s;
+}
+.pl-visibility:not(:disabled):hover {
+  color: var(--content-text);
+  border-color: var(--text-muted);
+}
+.pl-visibility-on {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.pl-visibility:disabled {
+  cursor: default;
+  opacity: 0.8;
+}

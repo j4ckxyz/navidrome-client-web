@@ -8,8 +8,11 @@ import { client } from "~/auth/session";
 import { qk } from "~/lib/query";
 import { playArtist } from "~/features/playback-helpers";
 import { isStarred, toggleStar } from "~/features/stars";
+import { shareLink } from "~/features/share/share";
+import { downloadCollectionOriginal } from "~/features/download/download";
 import { CoverArt } from "~/ui/CoverArt";
 import { Icon } from "~/ui/Icon";
+import { MenuButton } from "~/ui/Menu";
 import { AlbumCard } from "~/ui/AlbumCard";
 import { ArtistCard } from "~/ui/ArtistCard";
 import { AsyncState } from "~/ui/AsyncState";
@@ -71,6 +74,12 @@ export default function ArtistDetail() {
                 >
                   <Icon name={isStarred(artist().id, artist().starred) ? "heart-filled" : "heart"} size={22} />
                 </button>
+                <MenuButton
+                  items={[
+                    { label: "Share", icon: "share", onSelect: () => shareLink(`/artist/${artist().id}`, artist().name) },
+                    { label: "Download all (original)", icon: "download", onSelect: () => downloadCollectionOriginal(artist().id), separatorBefore: true },
+                  ]}
+                />
               </div>
 
               <Show when={bio()}>

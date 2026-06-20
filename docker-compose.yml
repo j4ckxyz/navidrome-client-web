@@ -32,6 +32,14 @@ services:
       # SAME folder your Navidrome scans at that path (uncomment the volume).
       # Leave empty to keep uploads off.
       MUSIC_DIR: ${MUSIC_DIR:-}
+
+      # --- Link previews (optional) ---
+      # Rich OpenGraph/Twitter/Bluesky cards (cover + title) for shared links,
+      # rendered server-side for crawlers. Needs NAVIDROME_URL set above plus a
+      # *read-only* Navidrome account used to fetch covers/titles for anonymous
+      # crawlers. Humans still hit the login screen. Empty = previews off.
+      NAVIDROME_OG_USER: ${NAVIDROME_OG_USER:-}
+      NAVIDROME_OG_PASS: ${NAVIDROME_OG_PASS:-}
     # volumes:
     #   - ${MUSIC_HOST_DIR:-./music}:/music   # host music library : MUSIC_DIR
     restart: unless-stopped

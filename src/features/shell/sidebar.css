@@ -111,6 +111,15 @@
   padding: 8px 11px;
   font-weight: 500;
 }
+.sidebar-playlist-name {
+  flex: 1;
+  min-width: 0;
+}
+/* Globe flag on playlists that are public (shared with the whole server). */
+.sidebar-playlist-public {
+  flex: none;
+  opacity: 0.65;
+}
 .sidebar-empty {
   padding: 8px 11px;
   font-size: 13px;

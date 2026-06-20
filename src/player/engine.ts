@@ -81,6 +81,10 @@ export class AudioEngine {
   private audioCtx: AudioContext | null = null;
   private eqChains: [EqChain | null, EqChain | null] = [null, null];
   private eqActive = false;
+  // Analyser tapping the master output for the now-playing visualizer. Shares
+  // the same lazily-built graph as the EQ (both decks feed it), so it reflects
+  // exactly what you hear — EQ, crossfade, ReplayGain and all.
+  private analyser: AnalyserNode | null = null;
   private eqPreampDb = 0;
   private eqGains: number[] = new Array(EQ_BAND_COUNT).fill(0);
 
@@ -157,6 +161,25 @@ export class AudioEngine {
     return typeof window !== "undefined" && "AudioContext" in window;
   }
 
+  // --- Visualizer ---
+
+  // Ensure the Web Audio graph exists and return the master analyser. Building
+  // the graph reloads the current sources as CORS-clean (same as the EQ), so the
+  // analyser only yields real data when streams are same-origin (proxy mode) or
+  // the server sends CORS headers. Returns null if Web Audio is unavailable.
+  enableAnalyser(): AnalyserNode | null {
+    if (!this.audioCtx) {
+      if (!this.buildEqGraph()) return null;
+      this.applyEqValues(); // keep EQ transparent unless it's actually on
+    }
+    this.resumeContext();
+    return this.analyser;
+  }
+
+  getAnalyser(): AnalyserNode | null {
+    return this.analyser;
+  }
+
   // One-time construction of the AudioContext and per-deck filter chains. Sets
   // crossOrigin on both elements and reloads any in-flight source so the graph
   // receives real samples rather than silence.
@@ -170,6 +193,15 @@ export class AudioEngine {
       console.warn("Equalizer: could not create AudioContext", err);
       return false;
     }
+
+    // Master analyser: every deck's chain terminates here, and it forwards to
+    // the speakers. Built before the chains so they can connect into it.
+    this.analyser = this.audioCtx.createAnalyser();
+    this.analyser.fftSize = 2048;
+    this.analyser.smoothingTimeConstant = 0.8;
+    this.analyser.minDecibels = -85;
+    this.analyser.maxDecibels = -12;
+    this.analyser.connect(this.audioCtx.destination);
 
     for (let i = 0; i < this.decks.length; i++) {
       const deck = this.decks[i];
@@ -233,7 +265,9 @@ export class AudioEngine {
       node = f;
     }
     node.connect(limiter);
-    limiter.connect(ctx.destination);
+    // Terminate at the master analyser (which feeds the destination), so the
+    // visualizer sees the fully-processed signal.
+    limiter.connect(this.analyser ?? ctx.destination);
     return { source, preamp, filters, limiter };
   }
 
