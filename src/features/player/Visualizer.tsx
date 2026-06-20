@@ -129,11 +129,26 @@ export function Visualizer(props: { colors: string[] }) {
       const spectrum = new Float32Array(BARS);
       let bassRaw = 0;
 
-      if (analyser && freq && wave && !useSynth) {
+      // Always read the analyser when we have one, so we can both render real
+      // data and notice it going silent or coming back. Opening the player
+      // reloads the stream (for CORS-clean taps) which blanks the analyser for a
+      // moment; we must ride that out and recover, not latch onto the synth for
+      // the rest of the session.
+      let peak = 0;
+      if (analyser && freq && wave) {
         analyser.getByteFrequencyData(freq);
         analyser.getByteTimeDomainData(wave);
+        for (let i = 0; i < freq.length; i++) if (freq[i] > peak) peak = freq[i];
 
-        let peak = 0;
+        if (playing && peak < 2) {
+          if (++flatFrames > 150) useSynth = true; // ~2.5s of silence → synthesize
+        } else {
+          flatFrames = 0;
+          if (peak >= 2) useSynth = false; // real audio is flowing again
+        }
+      }
+
+      if (analyser && freq && !useSynth) {
         // Log-spaced bins so musical content spreads across the width.
         const minBin = 2;
         const maxBin = Math.min(freq.length - 1, 560);
@@ -144,17 +159,9 @@ export function Visualizer(props: { colors: string[] }) {
           for (let b = b0; b < b1; b++) sum += freq[b];
           const v = sum / (b1 - b0) / 255;
           spectrum[i] = Math.pow(v, 1.35); // gamma for punchier dynamics
-          if (freq[i] > peak) peak = freq[i];
         }
         for (let b = 2; b < 14; b++) bassRaw += freq[b];
         bassRaw = bassRaw / (12 * 255);
-
-        // Detect a persistently silent analyser while we believe audio is on.
-        if (playing && peak < 2) {
-          if (++flatFrames > 90) useSynth = true;
-        } else {
-          flatFrames = 0;
-        }
       }
 
       if (useSynth) {
@@ -177,24 +184,25 @@ export function Visualizer(props: { colors: string[] }) {
         const k = target > heights[i] ? 0.45 : 0.12;
         heights[i] = lerp(heights[i], target, k);
       }
-      // Sustained low-end level → a gentle, continuous swell of the artwork.
-      bass = lerp(bass, bassRaw, bassRaw > bass ? 0.4 : 0.09);
+      // Fast-reacting envelope of the actual low-end level (quick attack, slower
+      // release). This is proportional to how much bass is really there, so the
+      // art swells with a heavy drop and barely moves in a quiet passage.
+      bass = lerp(bass, bassRaw, bassRaw > bass ? 0.55 : 0.12);
 
-      // Kick / bass-onset detection: a transient is when the instantaneous low
-      // end jumps well above its recent baseline. That feeds a fast-attack,
-      // quick-decay pulse so each kick or bass hit "thumps" the album art,
-      // rather than the art just breathing with the average level.
-      bassAvg = lerp(bassAvg, bassRaw, 0.045); // slow-moving baseline
-      const hit = Math.min(1, Math.max(0, bassRaw - bassAvg * 1.3 - 0.03) * 4.2);
-      pulse = Math.max(pulse * 0.86, hit); // jump up on a hit, else decay fast
+      // Kick emphasis: how far this frame jumps above its recent baseline, scaled
+      // by the SIZE of that jump (not clamped to a fixed pop), so a hard kick
+      // pushes the art out further than a soft one.
+      bassAvg = lerp(bassAvg, bassRaw, 0.05); // slow-moving baseline
+      const jump = Math.max(0, bassRaw - bassAvg * 1.1);
+      pulse = Math.max(pulse * 0.82, Math.min(1, jump * 2.6)); // proportional, decays fast
 
-      // Drive the artwork: --fs-beat scales the cover (gentle swell + punchy
-      // kick), --fs-beat-glow fades a colored glow behind it on each beat.
+      // Both the cover scale and the glow scale with the real bass: a proportional
+      // swell (bass) plus a proportional kick (pulse). Neither is a fixed amount.
       const root = canvas.parentElement;
       if (root) {
         const el = root as HTMLElement;
-        el.style.setProperty("--fs-beat", (1 + bass * 0.04 + pulse * 0.11).toFixed(4));
-        el.style.setProperty("--fs-beat-glow", pulse.toFixed(4));
+        el.style.setProperty("--fs-beat", (1 + bass * 0.1 + pulse * 0.07).toFixed(4));
+        el.style.setProperty("--fs-beat-glow", Math.min(1, bass * 0.45 + pulse * 0.8).toFixed(4));
       }
 
       // --- Paint ---

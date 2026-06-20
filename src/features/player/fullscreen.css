@@ -59,6 +59,18 @@
   }
 }
 
+/* Two-colour gradient pulled from the album cover, anchored along the bottom and
+   fading up into the plain background. Sits above the dimming scrim (so the
+   colour reads) but below the visualizer and content. Its colours are clamped to
+   the theme's background lightness in JS, so player text stays readable. A short
+   fade smooths the colour change between tracks. */
+.fs-gradient {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.45s var(--ease-out);
+}
+
 /* Music-reactive visualizer canvas. Sits above the scrim but below the content,
    so bright waves glow behind the art while text stays fully readable. The glow
    comes from additive compositing inside the canvas, so it reads on light and

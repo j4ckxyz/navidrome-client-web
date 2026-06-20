@@ -198,7 +198,9 @@ export class AudioEngine {
     // the speakers. Built before the chains so they can connect into it.
     this.analyser = this.audioCtx.createAnalyser();
     this.analyser.fftSize = 2048;
-    this.analyser.smoothingTimeConstant = 0.8;
+    // Lower smoothing keeps real frequency spikes crisp (otherwise the spectrum
+    // reads as soft, stretched humps); the visualizer adds its own gentle easing.
+    this.analyser.smoothingTimeConstant = 0.65;
     this.analyser.minDecibels = -85;
     this.analyser.maxDecibels = -12;
     this.analyser.connect(this.audioCtx.destination);
