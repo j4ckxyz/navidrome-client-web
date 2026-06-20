@@ -10,6 +10,8 @@ import { qk } from "~/lib/query";
 import { player } from "~/player/store";
 import { isStarred, toggleStar } from "~/features/stars";
 import { openAddToPlaylist } from "~/features/playlists/addToPlaylist";
+import { shareLink } from "~/features/share/share";
+import { openDownload } from "~/features/download/DownloadDialog";
 import { updateSettings } from "~/settings/store";
 import { derivePalette } from "~/theme/colors";
 import { extractColors, distinctColours } from "~/lib/colorExtract";
@@ -135,6 +137,8 @@ export default function AlbumDetail() {
                     { label: "Play next", icon: "next", onSelect: () => player.playNext(songs()) },
                     { label: "Add to queue", icon: "queue", onSelect: () => player.addToQueue(songs()) },
                     { label: "Add to playlist…", icon: "plus", onSelect: () => openAddToPlaylist(songs().map((s) => s.id)), separatorBefore: true },
+                    { label: "Share", icon: "share", onSelect: () => shareLink(`/album/${album().id}`, album().artist ? `${album().name} — ${album().artist}` : album().name), separatorBefore: true },
+                    { label: "Download…", icon: "download", onSelect: () => openDownload({ kind: "album", id: album().id, name: album().name, artist: album().artist, songs: songs() }) },
                     { label: "Theme from cover · Dark", icon: "settings", onSelect: () => themeFromCover("dark"), separatorBefore: true },
                     { label: "Theme from cover · Light", icon: "settings", onSelect: () => themeFromCover("light") },
                   ]}

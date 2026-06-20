@@ -59,6 +59,20 @@
   }
 }
 
+/* Music-reactive visualizer canvas. Sits above the scrim but below the content,
+   so bright waves glow behind the art while text stays fully readable. The glow
+   comes from additive compositing inside the canvas, so it reads on light and
+   dark themes alike. */
+.fs-visualizer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  display: block;
+  pointer-events: none;
+}
+
 .fs-inner {
   position: relative;
   z-index: 1;
@@ -111,6 +125,15 @@
   aspect-ratio: 1;
   border-radius: var(--radius-lg);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+  /* Gentle bass-driven pulse, set per-frame by the visualizer. */
+  transform: scale(var(--fs-beat, 1));
+  transform-origin: center;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fs-art .fs-cover {
+    transform: none;
+  }
 }
 
 .fs-info {

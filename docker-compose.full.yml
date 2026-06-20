@@ -37,6 +37,10 @@ services:
     environment:
       NAVIDROME_URL: http://navidrome:4533
       MUSIC_DIR: /music
+      # Optional: enable rich link previews by pointing these at a read-only
+      # Navidrome account (create one in Navidrome's user settings).
+      NAVIDROME_OG_USER: ${NAVIDROME_OG_USER:-}
+      NAVIDROME_OG_PASS: ${NAVIDROME_OG_PASS:-}
     volumes:
       - ${MUSIC_HOST_DIR:-./music}:/music
     restart: unless-stopped

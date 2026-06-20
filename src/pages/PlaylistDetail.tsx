@@ -13,6 +13,8 @@ import { CoverArt } from "~/ui/CoverArt";
 import { Icon } from "~/ui/Icon";
 import { MenuButton } from "~/ui/Menu";
 import { AsyncState } from "~/ui/AsyncState";
+import { shareLink } from "~/features/share/share";
+import { openDownload } from "~/features/download/DownloadDialog";
 import { formatCount, formatLongDuration } from "~/lib/format";
 import "./playlist.css";
 
@@ -112,6 +114,35 @@ export default function PlaylistDetail() {
     queryClient.invalidateQueries({ queryKey: qk.playlists() });
   }
 
+  // Whether the active user owns this playlist (only owners can change it).
+  function ownsCurrent(): boolean {
+    const me = client()?.username;
+    const owner = q.data?.owner;
+    return !owner || !me || owner === me;
+  }
+
+  // Flip a playlist between private (owner-only) and public (visible to everyone
+  // on the server). Confirm before exposing it.
+  async function toggleVisibility() {
+    const pl = q.data;
+    if (!pl || !ownsCurrent()) return;
+    const makePublic = !pl.public;
+    if (
+      makePublic &&
+      !confirm("Make this playlist public? Everyone on this server will be able to see it.")
+    ) {
+      return;
+    }
+    setSaving(true);
+    try {
+      await client()!.setPlaylistVisibility(params.id, makePublic);
+      queryClient.invalidateQueries({ queryKey: qk.playlist(params.id) });
+      queryClient.invalidateQueries({ queryKey: qk.playlists() });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function deletePlaylist() {
     if (!confirm(`Delete playlist "${q.data?.name}"? This cannot be undone.`)) return;
     await client()!.deletePlaylist(params.id);
@@ -167,7 +198,23 @@ export default function PlaylistDetail() {
                     <p class="muted">{pl().comment}</p>
                   </Show>
                   <div class="detail-sub">
-                    <span>{formatCount(order().length, "track")}</span>
+                    <button
+                      class="pl-visibility"
+                      classList={{ "pl-visibility-on": pl().public }}
+                      onClick={toggleVisibility}
+                      disabled={!ownsCurrent()}
+                      title={
+                        ownsCurrent()
+                          ? pl().public
+                            ? "Public — visible to everyone on this server. Click to make private."
+                            : "Private — only you can see this. Click to make public."
+                          : `Owned by ${pl().owner}`
+                      }
+                    >
+                      <Icon name={pl().public ? "globe" : "lock"} size={12} />
+                      {pl().public ? "Public" : "Private"}
+                    </button>
+                    <span class="detail-dot">{formatCount(order().length, "track")}</span>
                     <span class="detail-dot">{formatLongDuration(pl().duration)}</span>
                     <Show when={saving()}>
                       <span class="detail-dot pl-saving">
@@ -200,6 +247,8 @@ export default function PlaylistDetail() {
                 <MenuButton
                   items={[
                     { label: "Add to queue", icon: "queue", onSelect: () => player.addToQueue(order()) },
+                    { label: "Share", icon: "share", onSelect: () => shareLink(`/playlist/${pl().id}`, pl().name), separatorBefore: true },
+                    { label: "Download…", icon: "download", onSelect: () => openDownload({ kind: "playlist", id: pl().id, name: pl().name, songs: order() }) },
                     ...(canEditCover()
                       ? [{ label: "Upload cover photo", icon: "upload" as const, onSelect: () => coverInput?.click(), separatorBefore: true }]
                       : []),

@@ -6,10 +6,13 @@ import {
   ChevronRight,
   Clock,
   Disc,
+  Download,
   FileText,
+  Globe,
   GripVertical,
   Heart,
   Home,
+  Lock,
   Keyboard,
   List,
   ListMusic,
@@ -21,6 +24,7 @@ import {
   Pencil,
   Play,
   Plus,
+  Link2,
   Repeat,
   Repeat1,
   Search,
@@ -77,6 +81,10 @@ export type IconName =
   | "check"
   | "chevron-right"
   | "share"
+  | "link"
+  | "download"
+  | "lock"
+  | "globe"
   | "edit"
   | "trash"
   | "grip"
@@ -125,6 +133,10 @@ const LUCIDE_MAP: Record<IconName, LucideComp> = {
   check: Check,
   "chevron-right": ChevronRight,
   share: Share2,
+  link: Link2,
+  download: Download,
+  lock: Lock,
+  globe: Globe,
   edit: Pencil,
   trash: Trash2,
   grip: GripVertical,

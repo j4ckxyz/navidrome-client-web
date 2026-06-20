@@ -30,6 +30,14 @@ export function Sidebar(props: { onUpload?: () => void }) {
     enabled: !!client(),
   }));
 
+  // Only show playlists you own — never other users' public ones. Navidrome's
+  // getPlaylists returns every public playlist on the server, which is a privacy
+  // surprise on a shared instance.
+  const myPlaylists = () => {
+    const me = client()?.username;
+    return (playlists.data ?? []).filter((pl) => !me || !pl.owner || pl.owner === me);
+  };
+
   async function createPlaylist(e: Event) {
     e.preventDefault();
     const name = newName().trim();
@@ -82,15 +90,18 @@ export function Sidebar(props: { onUpload?: () => void }) {
         </Show>
 
         <div class="sidebar-playlist-list">
-          <For each={playlists.data}>
+          <For each={myPlaylists()}>
             {(pl) => (
               <A href={`/playlist/${pl.id}`} class="sidebar-link sidebar-playlist" activeClass="sidebar-link-active">
                 <Icon name="list" size={17} />
-                <span>{pl.name}</span>
+                <span class="sidebar-playlist-name">{pl.name}</span>
+                <Show when={pl.public}>
+                  <Icon name="globe" size={13} class="sidebar-playlist-public" />
+                </Show>
               </A>
             )}
           </For>
-          <Show when={playlists.data && playlists.data.length === 0}>
+          <Show when={playlists.data && myPlaylists().length === 0}>
             <p class="sidebar-empty muted">No playlists yet</p>
           </Show>
         </div>

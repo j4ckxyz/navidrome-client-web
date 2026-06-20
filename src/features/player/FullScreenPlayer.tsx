@@ -4,11 +4,13 @@
 // collapse chevron or Escape, with a brief slide-out so it doesn't just vanish.
 
 import { A } from "@solidjs/router";
-import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { client } from "~/auth/session";
 import { player } from "~/player/store";
 import { isStarred, toggleStar } from "~/features/stars";
+import { extractColors, distinctColours } from "~/lib/colorExtract";
 import { closeFullScreen } from "./fullscreen";
+import { Visualizer } from "./Visualizer";
 import { CoverArt } from "~/ui/CoverArt";
 import { Icon } from "~/ui/Icon";
 import { Slider } from "~/ui/Slider";
@@ -25,6 +27,24 @@ export function FullScreenPlayer() {
     const c = client();
     const art = song()?.coverArt;
     return c && art ? `url("${c.coverArtUrl(art, 600)}")` : "none";
+  });
+
+  // Cover-derived palette for the visualizer. Best-effort: needs a CORS-clean
+  // cover (proxy mode / CORS-enabled server); falls back to defaults otherwise.
+  const [vizColors, setVizColors] = createSignal<string[]>([]);
+  createEffect(() => {
+    const c = client();
+    const art = song()?.coverArt;
+    if (!c || !art) {
+      setVizColors([]);
+      return;
+    }
+    extractColors(c.coverArtUrl(art, 256))
+      .then(({ palette, accent }) => {
+        const cols = distinctColours([accent, ...palette], 4);
+        setVizColors(cols.length ? cols : []);
+      })
+      .catch(() => setVizColors([]));
   });
 
   const volIcon = createMemo(() => {
@@ -69,6 +89,9 @@ export function FullScreenPlayer() {
     >
       <div class="fs-backdrop" style={{ "background-image": backdrop() }} aria-hidden="true" />
       <div class="fs-scrim" aria-hidden="true" />
+      <Show when={song()}>
+        <Visualizer colors={vizColors()} />
+      </Show>
 
       <div class="fs-inner">
         <header class="fs-top">

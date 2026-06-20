@@ -27,6 +27,7 @@ It has exactly **two modes**, decided by one variable:
 |----------|---------|-------|
 | `NAVIDROME_URL` | _(empty)_ | e.g. `http://navidrome:4533` (same compose network) or `http://host.docker.internal:4533` (same host, Docker Desktop). Empty selects direct mode. |
 | `MUSIC_DIR` | _(empty — uploads off)_ | Path **inside the container**. Only matters in proxy mode. Set it (e.g. `/music`) **and** mount that path to the folder Navidrome scans to enable uploads. Empty keeps uploads off. |
+| `NAVIDROME_OG_USER` / `NAVIDROME_OG_PASS` | _(empty — previews off)_ | A **read-only** Navidrome account. Only matters in proxy mode. When both are set, shared links (`/album/:id`, `/playlist/:id`, `/artist/:id`) render rich OpenGraph/Twitter/Bluesky previews for crawlers. Empty keeps previews off. See [Link previews](#link-previews). |
 | `PORT` | `8080` | Listen port inside the container. |
 
 The image exposes `8080`; the compose files map host `8680 → 8080`.
@@ -216,6 +217,57 @@ and syncs to every client — including Navidrome's own UI.
 - Accepts JPEG, PNG, GIF, or WebP.
 - Works in both proxy and direct mode (in direct mode the target server must allow
   this origin via CORS, like every other API call).
+
+---
+
+## Downloads
+
+Albums, playlists, and individual songs have a **Download…** action (the "…" menu
+or right-click on a track). You pick a quality:
+
+- **Original** — the untranscoded source files. A song downloads its file; an
+  album/playlist downloads a ZIP that **Navidrome** assembles. Works in **any**
+  mode (proxy or direct).
+- **Opus 192k / MP3 320k / MP3 128k** — transcoded by Navidrome's transcoder.
+  - A **single song** transcodes and downloads anywhere.
+  - A whole **album/playlist** is transcoded and zipped by this app's backend
+    (`POST /download/zip`), so it streams to disk without buffering. This needs
+    **proxy mode** (`NAVIDROME_URL` set); in direct mode only Original is offered.
+
+Files are named sensibly (`01 Title.opus` inside `Artist - Album.zip`). Lossy
+formats must be enabled in Navidrome's transcoding settings (the defaults cover
+Opus and MP3).
+
+---
+
+## Link previews
+
+<a id="link-previews"></a>When someone shares a link to an album, playlist, or
+artist, crawlers (Twitter/X, Discord, Slack, Facebook, Bluesky, Mastodon, …) can
+show a rich card with the cover art and a proper title — rendered **server-side**
+so it works without JavaScript.
+
+**Enable it (proxy mode only):**
+
+1. In Navidrome, create a dedicated **read-only** user (any non-admin account).
+2. Set `NAVIDROME_OG_USER` and `NAVIDROME_OG_PASS` to that account.
+
+```bash
+# verify it's on
+curl -s http://localhost:8680/api/config
+# expect: {"proxyMode":true,...,"linkPreviews":true,...}
+```
+
+How it behaves:
+
+- **Crawlers** requesting `/album/:id` etc. get an `index.html` with `og:*` /
+  `twitter:*` tags. The cover is served via a public `/og/cover/:id` proxy (it
+  fetches with the read-only account, so anonymous crawlers can load the image).
+- **Humans** still get the normal app and the **login screen** — previews never
+  expose playback or bypass auth; they only reveal a title and cover for whatever
+  ID is in the link.
+- With the variables empty, the server behaves exactly as before (plain shell,
+  generic `Navidrome` title).
 
 ---
 

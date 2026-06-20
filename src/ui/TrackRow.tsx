@@ -9,6 +9,8 @@ import { player } from "~/player/store";
 import { settings } from "~/settings/store";
 import { isStarred, toggleStar } from "~/features/stars";
 import { openAddToPlaylist } from "~/features/playlists/addToPlaylist";
+import { shareLink } from "~/features/share/share";
+import { openDownload } from "~/features/download/DownloadDialog";
 import { formatDuration, formatRelativeDate } from "~/lib/format";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
@@ -69,6 +71,21 @@ export function TrackRow(props: TrackRowProps) {
         label: starred() ? "Remove favourite" : "Favourite",
         icon: starred() ? "heart-filled" : "heart",
         onSelect: () => toggleStar(props.song.id, props.song.starred, "song"),
+      },
+      {
+        label: "Share",
+        icon: "share",
+        onSelect: () =>
+          shareLink(
+            props.song.albumId ? `/album/${props.song.albumId}` : `/search?q=${encodeURIComponent(props.song.title)}`,
+            props.song.artist ? `${props.song.title} — ${props.song.artist}` : props.song.title,
+          ),
+        separatorBefore: true,
+      },
+      {
+        label: "Download…",
+        icon: "download",
+        onSelect: () => openDownload({ kind: "song", song: props.song }),
       },
     ];
     if (props.song.albumId) {
