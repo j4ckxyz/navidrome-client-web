@@ -1,5 +1,17 @@
-.home-greeting {
+.home-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
   margin-bottom: 22px;
+}
+.home-greeting {
+  margin-bottom: 0;
+}
+.home-roulette:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 .home-section {
   margin-bottom: 26px;

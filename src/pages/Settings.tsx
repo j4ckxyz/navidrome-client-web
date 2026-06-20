@@ -177,11 +177,18 @@ export default function Settings() {
                   onChange={(v) => updateSettings((s) => (s.playback.gapless = v))}
                 />
               </Row>
-              <Row label="Autoplay" hint="When the queue ends, keep playing similar tracks">
+              <Row label="Infinite radio" hint="Keep the queue topped up with similar tracks so playback never ends">
                 <Toggle
-                  label="Autoplay"
+                  label="Infinite radio"
                   checked={settings.playback.autoplay}
                   onChange={(v) => updateSettings((s) => (s.playback.autoplay = v))}
+                />
+              </Row>
+              <Row label="Forgotten Gems" hint="Bias radio and discovery toward tracks you've barely played">
+                <Toggle
+                  label="Forgotten Gems"
+                  checked={settings.playback.forgottenGems}
+                  onChange={(v) => updateSettings((s) => (s.playback.forgottenGems = v))}
                 />
               </Row>
               <Row label="Scrobble plays" hint="Report play counts and now-playing to the server">

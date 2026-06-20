@@ -193,7 +193,12 @@ export interface Settings {
     resumeQueueOnLaunch: boolean;
     maxBitRate: number; // 0 = original
     equalizer: EqualizerSettings;
-    autoplay: boolean; // when the queue ends, keep playing similar tracks
+    // Infinite radio: proactively top the queue up with similar tracks before it
+    // runs out, so playback never stops. (Stored as `autoplay` for back-compat.)
+    autoplay: boolean;
+    // Forgotten Gems: bias radio/discovery suggestions toward tracks you've
+    // barely played. See applyDiscoveryFilters in lib/recommendations.
+    forgottenGems: boolean;
   };
 
   power: {
@@ -565,6 +570,7 @@ export const DEFAULT_SETTINGS: Settings = {
       userPresets: [],
     },
     autoplay: true,
+    forgottenGems: false,
   },
   power: {
     shortcuts: { ...DEFAULT_SHORTCUTS },

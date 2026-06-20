@@ -11,6 +11,7 @@ import { createQuery } from "@tanstack/solid-query";
 import { client } from "~/auth/session";
 import { player } from "~/player/store";
 import { settings } from "~/settings/store";
+import { applyDiscoveryFilters } from "~/lib/recommendations";
 import { CoverArt } from "~/ui/CoverArt";
 import { Icon } from "~/ui/Icon";
 import { formatDuration } from "~/lib/format";
@@ -47,7 +48,8 @@ export function QueuePanel() {
   }));
   const suggested = createMemo(() => {
     const inQueue = new Set(player.state.queue.map((s) => s.id));
-    return (suggestions.data ?? []).filter((s) => !inQueue.has(s.id)).slice(0, 6);
+    const fresh = (suggestions.data ?? []).filter((s) => !inQueue.has(s.id));
+    return applyDiscoveryFilters(fresh).slice(0, 6);
   });
 
   return (

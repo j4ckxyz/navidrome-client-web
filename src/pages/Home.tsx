@@ -3,12 +3,13 @@
 // "discovery"; this is the user's own collection.
 
 import { createQuery } from "@tanstack/solid-query";
-import { For, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import { A } from "@solidjs/router";
 import { client, activeUsername } from "~/auth/session";
 import { settings } from "~/settings/store";
 import { qk } from "~/lib/query";
 import type { AlbumListType } from "~/api/client";
+import { vibeRoulette } from "~/features/playback-helpers";
 import { AlbumCard } from "~/ui/AlbumCard";
 import { Icon } from "~/ui/Icon";
 import "./home.css";
@@ -53,13 +54,39 @@ function Carousel(props: { title: string; type: AlbumListType; href: string }) {
   );
 }
 
+function VibeRoulette() {
+  const [rolling, setRolling] = createSignal(false);
+  async function roll() {
+    if (rolling()) return;
+    setRolling(true);
+    try {
+      await vibeRoulette();
+    } finally {
+      setRolling(false);
+    }
+  }
+  return (
+    <button
+      class="btn btn-primary home-roulette"
+      onClick={roll}
+      disabled={rolling() || !client()}
+    >
+      <Icon name="sparkles" size={16} />
+      {rolling() ? "Finding a vibe…" : "Vibe Roulette"}
+    </button>
+  );
+}
+
 export default function Home() {
   return (
     <div class="page">
-      <h1 class="page-title home-greeting">
-        {greeting()}
-        <Show when={displayName()}>, {displayName()}</Show>
-      </h1>
+      <div class="home-header">
+        <h1 class="page-title home-greeting">
+          {greeting()}
+          <Show when={displayName()}>, {displayName()}</Show>
+        </h1>
+        <VibeRoulette />
+      </div>
       <Carousel title="Recently added" type="newest" href="/albums?sort=newest" />
       <Carousel title="Most played" type="frequent" href="/albums?sort=frequent" />
       <Carousel title="Recently played" type="recent" href="/albums?sort=recent" />

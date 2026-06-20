@@ -32,6 +32,7 @@ export const qk = {
   search: (q: string) => ["search", q] as const,
   lyrics: (id: string) => ["lyrics", id] as const,
   randomSongs: () => ["randomSongs"] as const,
+  libraryStats: () => ["libraryStats"] as const,
 };
 
 // Invalidate everything that can reflect a star/unstar.

@@ -5,6 +5,11 @@ dist
 .vite
 bun.lockb
 
+# Local secrets — never commit real server credentials
+.env
+.env.*
+!.env.example
+
 # Docker compose runtime data (from docker-compose.full.yml)
 /nd-data
 /music
