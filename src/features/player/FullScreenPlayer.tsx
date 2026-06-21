@@ -9,6 +9,7 @@ import { createQuery } from "@tanstack/solid-query";
 import { client } from "~/auth/session";
 import { player } from "~/player/store";
 import { qk } from "~/lib/query";
+import { settings, updateSettings } from "~/settings/store";
 import { isStarred, toggleStar } from "~/features/stars";
 import { extractColors, distinctColours } from "~/lib/colorExtract";
 import { hexToRgb, rgbToOklch, oklch } from "~/theme/colors";
@@ -16,6 +17,7 @@ import { closeFullScreen } from "./fullscreen";
 import { Visualizer } from "./Visualizer";
 import { CoverArt } from "~/ui/CoverArt";
 import { Icon } from "~/ui/Icon";
+import { ToggleMenuButton } from "~/ui/Menu";
 import { Slider } from "~/ui/Slider";
 import { formatDuration } from "~/lib/format";
 import "./fullscreen.css";
@@ -141,17 +143,22 @@ export function FullScreenPlayer() {
   return (
     <div
       class="fs-player"
-      classList={{ "fs-leaving": leaving() }}
+      classList={{
+        "fs-leaving": leaving(),
+        "fs-static": !settings.layout.fullScreenVisualizer,
+      }}
       role="dialog"
       aria-modal="true"
       aria-label="Now playing"
     >
-      <div class="fs-backdrop" style={{ "background-image": backdrop() }} aria-hidden="true" />
+      <Show when={settings.layout.fullScreenBackdrop}>
+        <div class="fs-backdrop" style={{ "background-image": backdrop() }} aria-hidden="true" />
+      </Show>
       <div class="fs-scrim" aria-hidden="true" />
-      <Show when={gradient()}>
+      <Show when={settings.layout.fullScreenBackdrop && gradient()}>
         <div class="fs-gradient" style={{ "background-image": gradient() }} aria-hidden="true" />
       </Show>
-      <Show when={song()}>
+      <Show when={song() && settings.layout.fullScreenVisualizer}>
         <Visualizer colors={vizColors()} />
       </Show>
 
@@ -167,7 +174,27 @@ export function FullScreenPlayer() {
             <Icon name="chevron-right" size={22} />
           </button>
           <span class="fs-top-label muted">Now Playing</span>
-          <span class="fs-top-spacer" />
+          <ToggleMenuButton
+            class="fs-display-menu"
+            icon="sliders"
+            iconSize={20}
+            label="Display options"
+            heading="Display"
+            items={[
+              {
+                label: "Waveform",
+                icon: "waves",
+                checked: settings.layout.fullScreenVisualizer,
+                onChange: (v) => updateSettings((s) => (s.layout.fullScreenVisualizer = v)),
+              },
+              {
+                label: "Ambient backdrop",
+                icon: "image",
+                checked: settings.layout.fullScreenBackdrop,
+                onChange: (v) => updateSettings((s) => (s.layout.fullScreenBackdrop = v)),
+              },
+            ]}
+          />
         </header>
 
         <Show

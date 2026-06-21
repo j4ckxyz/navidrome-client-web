@@ -132,11 +132,27 @@ img {
   background-clip: content-box;
 }
 
-/* Focus ring: visible, accent-tinted, AA-friendly. */
+/* Focus ring: visible, accent-tinted, AA-friendly. Deliberately bold with a soft
+   halo so it reads from across a room (TV / remote navigation) and stands out
+   under keyboard / D-pad use. */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 3px solid var(--accent);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 5px color-mix(in oklab, var(--accent) 32%, transparent);
+}
+@supports not (background: color-mix(in oklab, red, blue)) {
+  :focus-visible {
+    box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.25);
+  }
+}
+
+/* Coarse pointers (touch): give interactive controls comfortable hit areas. */
+@media (pointer: coarse) {
+  .icon-btn {
+    width: 42px;
+    height: 42px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

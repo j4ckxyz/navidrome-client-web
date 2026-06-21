@@ -5,6 +5,7 @@ import { useLocation, useNavigate, useSearchParams } from "@solidjs/router";
 import { createEffect, createSignal, on } from "solid-js";
 import { Icon } from "~/ui/Icon";
 import { focusTick } from "./searchFocus";
+import { toggleDrawer } from "./drawer";
 import { settings } from "~/settings/store";
 import "./topbar.css";
 
@@ -47,6 +48,15 @@ export function TopBar() {
 
   return (
     <header class="topbar">
+      {/* Mobile-only: open the navigation drawer. Hidden on desktop. */}
+      <button
+        class="icon-btn topbar-menu"
+        onClick={toggleDrawer}
+        aria-label="Open menu"
+        title="Menu"
+      >
+        <Icon name="menu" size={22} />
+      </button>
       <div class="topbar-search">
         <Icon name="search" size={18} class="topbar-search-icon" />
         <input

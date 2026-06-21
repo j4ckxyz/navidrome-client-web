@@ -39,3 +39,22 @@
 .topbar-search-input::-webkit-search-cancel-button {
   -webkit-appearance: none;
 }
+
+/* Hamburger only appears on mobile, where the sidebar is a drawer. */
+.topbar-menu {
+  display: none;
+  flex: none;
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .topbar-menu {
+    display: inline-flex;
+  }
+  .topbar-search {
+    max-width: none;
+  }
+}

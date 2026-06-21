@@ -117,9 +117,13 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.fs-top-spacer {
-  width: 36px;
-  flex: none;
+/* Minimalist mode (waveform off): make sure the artwork rests, even if a beat
+   value was left set on the element when the visualizer was switched off. */
+.fs-static .fs-art .fs-cover {
+  transform: none;
+}
+.fs-static .fs-art::before {
+  display: none;
 }
 
 .fs-art {

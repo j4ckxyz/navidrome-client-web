@@ -182,6 +182,10 @@ export interface Settings {
     showSidebar: boolean;
     defaultLanding: LandingPage;
     showPlayCounts: boolean; // show play counts in track lists
+    // Full-screen "now playing" ambience. Turn both off for a clean, minimalist
+    // TV-style display (static art on a plain background).
+    fullScreenVisualizer: boolean; // music-reactive waveform background ("the waves")
+    fullScreenBackdrop: boolean; // blurred album-art ambient backdrop + cover gradient
   };
 
   playback: {
@@ -553,6 +557,8 @@ export const DEFAULT_SETTINGS: Settings = {
     showSidebar: true,
     defaultLanding: "home",
     showPlayCounts: true,
+    fullScreenVisualizer: true,
+    fullScreenBackdrop: true,
   },
   playback: {
     defaultVolume: 80,

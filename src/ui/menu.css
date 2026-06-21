@@ -52,3 +52,32 @@
   background: var(--border);
   margin: 4px 6px;
 }
+
+.menu-heading {
+  padding: 6px 9px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Toggle rows keep the check indicator pinned to the right so the column reads
+   as a list of switches. */
+.menu-item-toggle {
+  padding-right: 7px;
+}
+.menu-item-label {
+  flex: 1;
+}
+.menu-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  flex: none;
+  color: var(--accent);
+}
+.menu-item-toggle[data-highlighted] .menu-check {
+  color: var(--on-accent);
+}

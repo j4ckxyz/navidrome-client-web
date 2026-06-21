@@ -67,6 +67,63 @@ export function MenuButton(props: {
   );
 }
 
+export interface ToggleItem {
+  label: string;
+  icon?: IconName;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}
+
+// A dropdown of checkbox toggles. Unlike MenuButton, selecting an item flips it
+// in place and keeps the menu open, so several options can be changed at once.
+export function ToggleMenuButton(props: {
+  items: ToggleItem[];
+  label?: string;
+  class?: string;
+  icon?: IconName;
+  iconSize?: number;
+  heading?: string;
+}) {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger
+        class={`icon-btn menu-trigger ${props.class ?? ""}`}
+        aria-label={props.label ?? "Options"}
+        title={props.label}
+      >
+        <Icon name={props.icon ?? "sliders"} size={props.iconSize ?? 18} />
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content class="menu-content">
+          <Show when={props.heading}>
+            <div class="menu-heading">{props.heading}</div>
+          </Show>
+          <For each={props.items}>
+            {(item) => (
+              <DropdownMenu.CheckboxItem
+                class="menu-item menu-item-toggle"
+                checked={item.checked}
+                onChange={item.onChange}
+                closeOnSelect={false}
+              >
+                <Show when={item.icon}>
+                  <Icon name={item.icon!} size={15} />
+                </Show>
+                <span class="menu-item-label">{item.label}</span>
+                <DropdownMenu.ItemIndicator class="menu-check" forceMount>
+                  <Show when={item.checked}>
+                    <Icon name="check" size={15} />
+                  </Show>
+                </DropdownMenu.ItemIndicator>
+              </DropdownMenu.CheckboxItem>
+            )}
+          </For>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
 export function RowContextMenu(props: { items: ActionItem[]; children: JSX.Element }) {
   return (
     <ContextMenu.Root>

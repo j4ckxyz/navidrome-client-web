@@ -20,8 +20,9 @@ const NAV: { href: string; label: string; icon: IconName; end?: boolean }[] = [
   { href: "/stats", label: "Stats", icon: "server" },
 ];
 
-export function Sidebar(props: { onUpload?: () => void }) {
+export function Sidebar(props: { onUpload?: () => void; onNavigate?: () => void }) {
   const navigate = useNavigate();
+  const go = () => props.onNavigate?.();
   const [creating, setCreating] = createSignal(false);
   const [newName, setNewName] = createSignal("");
 
@@ -52,7 +53,7 @@ export function Sidebar(props: { onUpload?: () => void }) {
   return (
     <nav class="sidebar">
       <div class="sidebar-inner">
-      <A href="/" end class="sidebar-brand">
+      <A href="/" end class="sidebar-brand" onClick={go}>
         <span class="sidebar-logo">
           <Icon name="disc" size={22} />
         </span>
@@ -62,7 +63,13 @@ export function Sidebar(props: { onUpload?: () => void }) {
       <div class="sidebar-nav">
         <For each={NAV}>
           {(item) => (
-            <A href={item.href} end={item.end} class="sidebar-link" activeClass="sidebar-link-active">
+            <A
+              href={item.href}
+              end={item.end}
+              class="sidebar-link"
+              activeClass="sidebar-link-active"
+              onClick={go}
+            >
               <Icon name={item.icon} size={19} />
               <span>{item.label}</span>
             </A>
@@ -93,7 +100,7 @@ export function Sidebar(props: { onUpload?: () => void }) {
         <div class="sidebar-playlist-list">
           <For each={myPlaylists()}>
             {(pl) => (
-              <A href={`/playlist/${pl.id}`} class="sidebar-link sidebar-playlist" activeClass="sidebar-link-active">
+              <A href={`/playlist/${pl.id}`} class="sidebar-link sidebar-playlist" activeClass="sidebar-link-active" onClick={go}>
                 <Icon name="list" size={17} />
                 <span class="sidebar-playlist-name">{pl.name}</span>
                 <Show when={pl.public}>
@@ -109,7 +116,7 @@ export function Sidebar(props: { onUpload?: () => void }) {
       </div>
 
       <div class="sidebar-foot">
-        <button class="sidebar-account" onClick={() => navigate("/settings")}>
+        <button class="sidebar-account" onClick={() => { go(); navigate("/settings"); }}>
           <span class="sidebar-account-info">
             <span class="sidebar-account-user">{activeUsername()}</span>
             <span class="sidebar-account-server muted">
@@ -120,14 +127,14 @@ export function Sidebar(props: { onUpload?: () => void }) {
         <Show when={isAdmin() && uploadEnabled()}>
           <button
             class="icon-btn"
-            onClick={props.onUpload}
+            onClick={() => { go(); props.onUpload?.(); }}
             aria-label="Upload music"
             title="Upload music"
           >
             <Icon name="upload" size={19} />
           </button>
         </Show>
-        <A href="/settings" class="icon-btn" aria-label="Settings" title="Settings">
+        <A href="/settings" class="icon-btn" aria-label="Settings" title="Settings" onClick={go}>
           <Icon name="settings" size={19} />
         </A>
         <button class="icon-btn" onClick={logout} aria-label="Log out" title="Log out">

@@ -2,10 +2,13 @@
 // bar, optional queue/lyrics side panel, and the persistent now-playing bar.
 // Also installs global keyboard shortcuts and the add-to-playlist dialog.
 
-import { createSignal, type JSX, onMount, Show } from "solid-js";
+import { createEffect, createSignal, type JSX, onMount, Show } from "solid-js";
 import { useLocation, useNavigate } from "@solidjs/router";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
+import { MobileNav } from "./MobileNav";
+import { drawerOpen, closeDrawer } from "./drawer";
+import { installSpatialNav } from "./spatialNav";
 import { NowPlayingBar } from "~/features/player/NowPlayingBar";
 import { FullScreenPlayer } from "~/features/player/FullScreenPlayer";
 import { isFullScreen } from "~/features/player/fullscreen";
@@ -33,6 +36,7 @@ const LANDING_ROUTES: Record<string, string> = {
 
 export function AppShell(props: { children?: JSX.Element }) {
   installShortcuts();
+  installSpatialNav();
   const navigate = useNavigate();
   const location = useLocation();
   const sidePanel = () => settings.layout.showQueuePanel || settings.layout.showLyricsPanel;
@@ -46,15 +50,25 @@ export function AppShell(props: { children?: JSX.Element }) {
     }
   });
 
+  // Close the mobile drawer whenever the route changes, so tapping a link inside
+  // it returns you straight to the content.
+  createEffect(() => {
+    location.pathname;
+    closeDrawer();
+  });
+
   return (
     <div
       class="app-shell"
       classList={{
         "app-shell-side": sidePanel(),
         "app-shell-collapsed": !settings.layout.showSidebar,
+        "app-shell-drawer-open": drawerOpen(),
       }}
     >
-      <Sidebar onUpload={() => setShowUpload(true)} />
+      <Sidebar onUpload={() => setShowUpload(true)} onNavigate={closeDrawer} />
+      {/* Dimming scrim behind the drawer on mobile; tap to close. */}
+      <button class="drawer-scrim" aria-label="Close menu" onClick={closeDrawer} />
       <button
         class="sidebar-edge"
         onClick={() => updateSettings((s) => (s.layout.showSidebar = !s.layout.showSidebar))}
@@ -94,6 +108,7 @@ export function AppShell(props: { children?: JSX.Element }) {
         </div>
       </div>
       <NowPlayingBar />
+      <MobileNav />
       <Show when={isFullScreen()}>
         <FullScreenPlayer />
       </Show>

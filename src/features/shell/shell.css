@@ -152,3 +152,76 @@
 .app-shell-collapsed .sidebar-edge-chevron svg {
   transform: rotate(0deg);
 }
+
+/* Dimming scrim behind the mobile drawer. Removed from layout on desktop. */
+.drawer-scrim {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Mobile / tablet: the rigid desktop grid gives way to a single scrolling
+   column. The sidebar becomes an off-canvas drawer, the desktop side panels
+   (queue/lyrics) are hidden in favour of the full-screen player, and a bottom
+   tab bar handles primary navigation.
+   --------------------------------------------------------------------------- */
+@media (max-width: 760px) {
+  .app-shell {
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: none;
+  }
+  .app-content {
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* Sidebar → drawer. Fixed, slides in from the left over the content. */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 300;
+    width: min(82vw, 320px);
+    overflow: visible;
+    transform: translateX(-100%);
+    transition: transform 0.28s var(--ease-out);
+  }
+  /* The drawer is always interactive on mobile, regardless of the desktop
+     "collapsed" preference. */
+  .sidebar,
+  .app-shell-collapsed .sidebar {
+    pointer-events: auto;
+  }
+  .app-shell-drawer-open .sidebar {
+    transform: translateX(0);
+  }
+  .sidebar-inner {
+    width: 100%;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.45);
+  }
+
+  .drawer-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 290;
+    border: none;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s var(--ease-out);
+  }
+  .app-shell-drawer-open .drawer-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Desktop-only chrome that doesn't belong on a phone. */
+  .sidebar-edge {
+    display: none;
+  }
+  .side-panel-wrapper {
+    display: none;
+  }
+}

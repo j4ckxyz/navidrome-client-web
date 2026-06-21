@@ -12,6 +12,7 @@ import {
   GripVertical,
   Heart,
   Home,
+  Image,
   Lock,
   Keyboard,
   List,
@@ -31,6 +32,7 @@ import {
   Server,
   Settings,
   Share2,
+  SlidersHorizontal,
   Sparkles,
   Shuffle,
   SkipBack,
@@ -43,6 +45,7 @@ import {
   Volume1,
   Volume2,
   VolumeX,
+  Waves,
   X,
 } from "lucide-solid";
 
@@ -91,7 +94,10 @@ export type IconName =
   | "grip"
   | "server"
   | "upload"
-  | "sparkles";
+  | "sparkles"
+  | "waves"
+  | "image"
+  | "sliders";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LucideComp = Component<any>;
@@ -145,6 +151,9 @@ const LUCIDE_MAP: Record<IconName, LucideComp> = {
   server: Server,
   upload: Upload,
   sparkles: Sparkles,
+  waves: Waves,
+  image: Image,
+  sliders: SlidersHorizontal,
 };
 
 export interface IconProps {

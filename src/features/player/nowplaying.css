@@ -164,3 +164,29 @@
   opacity: 0.5;
   pointer-events: none;
 }
+
+/* Mobile: collapse to a compact mini-player — art + title on the left, a single
+   play/prev/next cluster on the right. The seek bar, volume, and side-panel
+   toggles live in the full-screen player (tap the artwork to open it). */
+@media (max-width: 760px) {
+  .np-bar {
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    padding: 0 10px;
+    height: 60px;
+  }
+  .np-seek {
+    display: none;
+  }
+  /* Keep prev / play / next; drop shuffle (first) and repeat (last). */
+  .np-controls > .icon-btn:first-child,
+  .np-controls > .icon-btn:last-child {
+    display: none;
+  }
+  .np-right {
+    display: none;
+  }
+  .np-star {
+    display: none;
+  }
+}
