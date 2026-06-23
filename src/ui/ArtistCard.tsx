@@ -20,7 +20,7 @@ export function ArtistCard(props: { artist: ArtistSummary }) {
     <RowContextMenu items={actions()}>
       <A href={`/artist/${props.artist.id}`} class="card card-artist">
         <div class="card-art">
-          <CoverArt coverArt={props.artist.coverArt} rounded alt="" />
+          <CoverArt coverArt={props.artist.coverArt} rounded reqSize={448} alt="" />
           <button
             class="card-play"
             aria-label={`Play ${props.artist.name}`}

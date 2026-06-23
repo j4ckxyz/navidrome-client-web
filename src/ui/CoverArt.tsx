@@ -9,6 +9,10 @@ import "./coverart.css";
 export function CoverArt(props: {
   coverArt?: string;
   size?: number;
+  // Requested source resolution in px, decoupled from the display box. Grids
+  // render a responsive (unsized) box but shouldn't fetch a full 600px cover for
+  // a ~180px tile, so they cap it here. Defaults to size*2 (retina) or 600.
+  reqSize?: number;
   rounded?: boolean;
   alt?: string;
   class?: string;
@@ -16,7 +20,7 @@ export function CoverArt(props: {
   const url = createMemo(() => {
     const c = client();
     if (!c || !props.coverArt) return "";
-    return c.coverArtUrl(props.coverArt, props.size ? props.size * 2 : 600);
+    return c.coverArtUrl(props.coverArt, props.reqSize ?? (props.size ? props.size * 2 : 600));
   });
 
   const [loaded, setLoaded] = createSignal(false);

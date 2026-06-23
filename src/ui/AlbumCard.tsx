@@ -37,7 +37,7 @@ export function AlbumCard(props: { album: Album }) {
     <RowContextMenu items={actions()}>
       <A href={`/album/${props.album.id}`} class="card">
         <div class="card-art">
-          <CoverArt coverArt={props.album.coverArt} alt="" />
+          <CoverArt coverArt={props.album.coverArt} reqSize={448} alt="" />
           <button
             class="card-play"
             aria-label={`Play ${props.album.name}`}
