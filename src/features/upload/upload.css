@@ -181,3 +181,196 @@
   gap: 10px;
   justify-content: flex-end;
 }
+
+/* ---- Mode tabs ---- */
+.upload-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--content-bg);
+  border-radius: var(--radius-sm);
+}
+
+.upload-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: calc(var(--radius-sm) - 2px);
+  cursor: pointer;
+  transition: background 0.14s var(--ease-out), color 0.14s var(--ease-out);
+}
+
+.upload-tab:hover {
+  color: var(--text);
+}
+
+.upload-tab-active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.upload-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.upload-note strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ---- Indeterminate progress (organize scan/apply) ---- */
+.upload-progress-indeterminate {
+  width: 35% !important;
+  border-radius: 2px;
+  animation: upload-indeterminate 1.1s var(--ease-out) infinite;
+}
+@keyframes upload-indeterminate {
+  0% { margin-left: -35%; }
+  100% { margin-left: 100%; }
+}
+
+/* ---- Organize: album groups ---- */
+.upload-organize-summary {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.upload-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.upload-group {
+  background: var(--content-bg);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: opacity 0.14s var(--ease-out);
+}
+
+.upload-group-off {
+  opacity: 0.5;
+}
+
+.upload-group-head {
+  display: flex;
+  align-items: stretch;
+}
+
+.upload-group-check {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.upload-group-check input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.upload-group-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 10px 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.upload-group-chevron {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform 0.14s var(--ease-out);
+}
+
+.upload-group-chevron-open {
+  transform: rotate(90deg);
+}
+
+.upload-group-folder {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upload-group-tag-warn {
+  color: var(--danger);
+  font-weight: 400;
+}
+
+.upload-group-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.upload-group-files {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 12px 10px 33px;
+}
+
+.upload-group-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.upload-group-file-path {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.upload-group-file-from {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+}
+
+.upload-group-file-arrow {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.upload-group-file-to {
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+}
