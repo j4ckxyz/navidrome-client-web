@@ -48,6 +48,13 @@ function isAudioFile(name: string): boolean {
   return AUDIO_EXTS.has(ext);
 }
 
+// OS junk that can carry a real audio extension: macOS AppleDouble sidecars
+// ("._track.flac"), .DS_Store, hidden dotfiles, and __MACOSX wrappers. Any path
+// segment starting with a dot is rejected (real audio files never start with one).
+function isJunkPath(path: string): boolean {
+  return path.split(/[/\\]/).some((seg) => seg === "__MACOSX" || seg.startsWith("."));
+}
+
 // Resolve a relative path inside a base directory and reject path traversal.
 function safeJoin(base: string, rel: string): string {
   const resolved = resolve(join(base, rel));
@@ -263,6 +270,7 @@ app.post("/upload", async (c) => {
   // ignored — grouping comes from tags so loose files and flat archives still
   // land in tidy album folders.
   async function place(data: Uint8Array, name: string) {
+    if (isJunkPath(name)) return; // skip ._sidecars / .DS_Store etc.
     const tags = await readTagsBuffer(data, name);
     const rel = `${albumFolder(tags)}/${baseName(name)}`;
     let dest: string;
@@ -336,7 +344,7 @@ async function scanLooseFiles(): Promise<CleanupGroup[]> {
   const groups = new Map<string, CleanupGroup>();
 
   for (const ent of entries) {
-    if (!ent.isFile() || !isAudioFile(ent.name)) continue; // skip album folders
+    if (!ent.isFile() || !isAudioFile(ent.name) || isJunkPath(ent.name)) continue; // skip album folders + OS junk
     const full = join(MUSIC_DIR, ent.name);
     const tags = await readTagsFile(full);
     const folder = albumFolder(tags);
@@ -419,7 +427,7 @@ app.post("/cleanup/apply", async (c) => {
   const errors: { file: string; error: string }[] = [];
 
   for (const ent of entries) {
-    if (!ent.isFile() || !isAudioFile(ent.name)) continue;
+    if (!ent.isFile() || !isAudioFile(ent.name) || isJunkPath(ent.name)) continue;
     const src = join(MUSIC_DIR, ent.name);
     // Re-derive the folder from tags rather than trusting the client, so we only
     // ever move files into a grouping the server itself computed.

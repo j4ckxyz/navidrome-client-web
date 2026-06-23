@@ -53,9 +53,21 @@ function isAudioOrZip(file: File): boolean {
   return ext === "zip" || AUDIO_EXTS.has(ext);
 }
 
+// OS junk that can carry a real audio extension and so slips past the ext check:
+// macOS AppleDouble sidecars ("._track.flac"), .DS_Store, any hidden dotfile, and
+// __MACOSX wrappers. Reject if any path segment starts with a dot — safe across
+// OSes since real audio files never do.
+function isJunkPath(path: string): boolean {
+  return path.split(/[/\\]/).some((seg) => seg === "__MACOSX" || seg.startsWith("."));
+}
+
+function keepFile(file: File, relPath: string): boolean {
+  return isAudioOrZip(file) && !isJunkPath(relPath);
+}
+
 function collectFiles(fileList: FileList): UploadFile[] {
   return Array.from(fileList)
-    .filter(isAudioOrZip)
+    .filter((f) => keepFile(f, (f as any).webkitRelativePath || f.name))
     .map((f) => ({
       file: f,
       // webkitRelativePath is set for folder uploads; fall back to the filename.
@@ -100,7 +112,7 @@ function readEntry(entry: any, prefix: string): Promise<{ file: File; path: stri
 async function readDroppedEntries(entries: any[]): Promise<UploadFile[]> {
   const out: { file: File; path: string }[] = [];
   for (const entry of entries) out.push(...(await readEntry(entry, "")));
-  return out.filter((u) => isAudioOrZip(u.file)).map((u) => ({ file: u.file, path: u.path }));
+  return out.filter((u) => keepFile(u.file, u.path)).map((u) => ({ file: u.file, path: u.path }));
 }
 
 export function UploadDialog(props: { onClose: () => void }) {
