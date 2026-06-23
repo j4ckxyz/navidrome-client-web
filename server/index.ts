@@ -12,11 +12,15 @@
 // via POST /upload. Files are written to MUSIC_DIR and a library scan is
 // triggered automatically.
 
-import { Hono } from "hono";
-import { mkdirSync } from "node:fs";
+import { Hono, type Context } from "hono";
+import {
+  mkdirSync, readdirSync, statSync, renameSync,
+  copyFileSync, unlinkSync, existsSync,
+} from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { unzipSync, Zip, ZipPassThrough } from "fflate";
+import { parseBuffer, parseFile } from "music-metadata";
 
 const NAVIDROME_URL = (process.env.NAVIDROME_URL ?? "").replace(/\/+$/, "");
 const PORT = +(process.env.PORT ?? 8080);
@@ -51,6 +55,74 @@ function safeJoin(base: string, rel: string): string {
     throw new Error("Invalid path");
   }
   return resolved;
+}
+
+// ---- Tag-driven album organisation -----------------------------------------
+//
+// Navidrome groups tracks into albums by their *tags*, not their folders, which
+// is why an album can show up correctly even while its files are dumped loose in
+// the media root. We read the same tags here so uploads (and the cleanup
+// backfill) can mirror that grouping on disk: one "Artist - Album" folder per
+// album, files inside.
+
+interface TrackTags {
+  artist: string | null;
+  album: string | null;
+}
+
+const UNKNOWN_ARTIST = "Unknown Artist";
+const UNKNOWN_ALBUM = "Unknown Album";
+
+// Prefer album-artist so compilations and "feat." tracks still collapse into a
+// single album folder — the same way Navidrome groups them.
+function tagsFrom(meta: { common?: any }): TrackTags {
+  const c = meta.common ?? {};
+  const artistRaw =
+    c.albumartist || c.artist || (Array.isArray(c.artists) ? c.artists[0] : null) || null;
+  const albumRaw = c.album || null;
+  const clean = (v: unknown) =>
+    typeof v === "string" && v.trim() ? v.trim() : null;
+  return { artist: clean(artistRaw), album: clean(albumRaw) };
+}
+
+// Read only what we need; skip cover art and duration scanning for speed.
+const TAG_OPTS = { duration: false, skipCovers: true } as const;
+
+async function readTagsBuffer(buf: Uint8Array, filename: string): Promise<TrackTags> {
+  try {
+    return tagsFrom(await parseBuffer(buf, { path: filename }, TAG_OPTS));
+  } catch {
+    return { artist: null, album: null };
+  }
+}
+
+async function readTagsFile(path: string): Promise<TrackTags> {
+  try {
+    return tagsFrom(await parseFile(path, TAG_OPTS));
+  } catch {
+    return { artist: null, album: null };
+  }
+}
+
+// Make a string safe to use as a single cross-platform path segment.
+function sanitizeSegment(name: string): string {
+  return name
+    .replace(/[/\\:*?"<>|\x00-\x1f]/g, " ") // illegal + control chars
+    .replace(/\s+/g, " ")
+    .replace(/^[.\s]+|[.\s]+$/g, "") // no leading/trailing dots or spaces
+    .slice(0, 120)
+    .trim();
+}
+
+// "Artist - Album" folder name derived from tags, with safe fallbacks.
+function albumFolder(tags: TrackTags): string {
+  const artist = sanitizeSegment(tags.artist ?? "") || UNKNOWN_ARTIST;
+  const album = sanitizeSegment(tags.album ?? "") || UNKNOWN_ALBUM;
+  return `${artist} - ${album}`;
+}
+
+function baseName(p: string): string {
+  return p.split(/[/\\]/).pop() || p;
 }
 
 // Sanitize a path from a ZIP entry: strip leading slashes, drop MacOS junk.
@@ -119,6 +191,47 @@ async function verifyAdmin(opts: {
   return false;
 }
 
+interface AuthHeaders {
+  jwt?: string;
+  subUser?: string;
+  subToken?: string;
+  subSalt?: string;
+}
+
+function authHeadersFrom(c: Context): AuthHeaders {
+  return {
+    jwt: c.req.header("x-nd-authorization"),
+    subUser: c.req.header("x-nd-subsonic-u"),
+    subToken: c.req.header("x-nd-subsonic-t"),
+    subSalt: c.req.header("x-nd-subsonic-s"),
+  };
+}
+
+// Kick off a Navidrome library scan so newly written/moved files appear.
+// Non-fatal: a manual scan still works if this fails.
+async function triggerScan(h: AuthHeaders): Promise<boolean> {
+  try {
+    if (h.subUser && h.subToken && h.subSalt) {
+      const params = new URLSearchParams({
+        u: h.subUser, t: h.subToken, s: h.subSalt,
+        v: "1.16.1", c: "navidrome-web", f: "json",
+      });
+      const res = await fetch(`${NAVIDROME_URL}/rest/startScan.view?${params}`);
+      return res.ok;
+    } else if (h.jwt) {
+      const res = await fetch(`${NAVIDROME_URL}/api/scanner`, {
+        method: "PUT",
+        headers: { "x-nd-authorization": h.jwt, "Content-Type": "application/json" },
+        body: JSON.stringify({ fullRescan: false }),
+      });
+      return res.ok;
+    }
+  } catch {
+    // swallow — non-fatal
+  }
+  return false;
+}
+
 // ---- Upload ----------------------------------------------------------------
 
 app.post("/upload", async (c) => {
@@ -126,13 +239,8 @@ app.post("/upload", async (c) => {
     return c.json({ error: "Upload not configured (set MUSIC_DIR and NAVIDROME_URL)" }, 503);
   }
 
-  const jwt = c.req.header("x-nd-authorization");
-  const subUser = c.req.header("x-nd-subsonic-u");
-  const subToken = c.req.header("x-nd-subsonic-t");
-  const subSalt = c.req.header("x-nd-subsonic-s");
-
-  const admin = await verifyAdmin({ jwt, subUser, subToken, subSalt });
-  if (!admin) {
+  const auth = authHeadersFrom(c);
+  if (!(await verifyAdmin(auth))) {
     return c.json({ error: "Admin access required" }, 403);
   }
 
@@ -148,8 +256,25 @@ app.post("/upload", async (c) => {
     return c.json({ error: "No file provided" }, 400);
   }
 
-  const relativePath = (formData.get("path") as string | null) ?? file.name;
   const written: string[] = [];
+
+  // Place an audio file into its tag-derived "Artist - Album" folder. The
+  // original folder structure (webkitRelativePath / ZIP paths) is intentionally
+  // ignored — grouping comes from tags so loose files and flat archives still
+  // land in tidy album folders.
+  async function place(data: Uint8Array, name: string) {
+    const tags = await readTagsBuffer(data, name);
+    const rel = `${albumFolder(tags)}/${baseName(name)}`;
+    let dest: string;
+    try {
+      dest = safeJoin(MUSIC_DIR, rel);
+    } catch {
+      return; // path traversal — skip
+    }
+    mkdirSync(dirname(dest), { recursive: true });
+    await Bun.write(dest, data);
+    written.push(rel);
+  }
 
   try {
     const buf = new Uint8Array(await file.arrayBuffer());
@@ -166,27 +291,10 @@ app.post("/upload", async (c) => {
       for (const [entryPath, data] of Object.entries(unzipped)) {
         const clean = sanitizeZipEntry(entryPath);
         if (!clean || !isAudioFile(clean)) continue;
-        let dest: string;
-        try {
-          dest = safeJoin(MUSIC_DIR, clean);
-        } catch {
-          continue;
-        }
-        mkdirSync(dirname(dest), { recursive: true });
-        await Bun.write(dest, data);
-        written.push(clean);
+        await place(data, clean);
       }
     } else if (isAudioFile(file.name)) {
-      const clean = relativePath.replace(/\.\.(\/|\\)/g, "").replace(/^[/\\]+/, "");
-      let dest: string;
-      try {
-        dest = safeJoin(MUSIC_DIR, clean);
-      } catch {
-        return c.json({ error: "Invalid file path" }, 400);
-      }
-      mkdirSync(dirname(dest), { recursive: true });
-      await Bun.write(dest, buf);
-      written.push(clean);
+      await place(buf, file.name);
     } else {
       return c.json({ error: "Unsupported file type. Upload audio files or a ZIP archive." }, 400);
     }
@@ -196,30 +304,159 @@ app.post("/upload", async (c) => {
   }
 
   // Trigger a library scan so the new files appear in Navidrome.
-  let scanStarted = false;
-  if (written.length > 0) {
+  const scanStarted = written.length > 0 ? await triggerScan(auth) : false;
+
+  return c.json({ written, scanStarted });
+});
+
+// ---- Cleanup / backfill ----------------------------------------------------
+//
+// "Organize" pass for libraries where files were dumped loose in the media root
+// (e.g. older single-file uploads). Scans only the *top level* of MUSIC_DIR:
+// existing subfolders are treated as already-organised albums and left alone.
+// /cleanup/scan returns the proposed grouping for confirmation; /cleanup/apply
+// re-derives the same grouping server-side and moves only the confirmed albums.
+
+interface CleanupFile {
+  name: string;
+  size: number;
+  hasTags: boolean;
+}
+interface CleanupGroup {
+  folder: string;
+  artist: string;
+  album: string;
+  hasTags: boolean;
+  files: CleanupFile[];
+}
+
+// Group loose top-level audio files by their tag-derived album folder.
+async function scanLooseFiles(): Promise<CleanupGroup[]> {
+  const entries = readdirSync(MUSIC_DIR, { withFileTypes: true });
+  const groups = new Map<string, CleanupGroup>();
+
+  for (const ent of entries) {
+    if (!ent.isFile() || !isAudioFile(ent.name)) continue; // skip album folders
+    const full = join(MUSIC_DIR, ent.name);
+    const tags = await readTagsFile(full);
+    const folder = albumFolder(tags);
+    const hasTags = !!(tags.artist || tags.album);
+    let size = 0;
     try {
-      if (subUser && subToken && subSalt) {
-        const params = new URLSearchParams({
-          u: subUser, t: subToken, s: subSalt,
-          v: "1.16.1", c: "navidrome-web", f: "json",
-        });
-        const res = await fetch(`${NAVIDROME_URL}/rest/startScan.view?${params}`);
-        scanStarted = res.ok;
-      } else if (jwt) {
-        const res = await fetch(`${NAVIDROME_URL}/api/scanner`, {
-          method: "PUT",
-          headers: { "x-nd-authorization": jwt, "Content-Type": "application/json" },
-          body: JSON.stringify({ fullRescan: false }),
-        });
-        scanStarted = res.ok;
-      }
+      size = statSync(full).size;
     } catch {
-      // Non-fatal — files are written; manual scan still works.
+      // unreadable — still report it
+    }
+
+    let g = groups.get(folder);
+    if (!g) {
+      g = {
+        folder,
+        artist: tags.artist ?? UNKNOWN_ARTIST,
+        album: tags.album ?? UNKNOWN_ALBUM,
+        hasTags,
+        files: [],
+      };
+      groups.set(folder, g);
+    }
+    g.files.push({ name: ent.name, size, hasTags });
+  }
+
+  return [...groups.values()].sort((a, b) => a.folder.localeCompare(b.folder));
+}
+
+app.post("/cleanup/scan", async (c) => {
+  if (!MUSIC_DIR || !NAVIDROME_URL) {
+    return c.json({ error: "Upload not configured (set MUSIC_DIR and NAVIDROME_URL)" }, 503);
+  }
+  const auth = authHeadersFrom(c);
+  if (!(await verifyAdmin(auth))) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+
+  let groups: CleanupGroup[];
+  try {
+    groups = await scanLooseFiles();
+  } catch (err) {
+    console.error("Cleanup scan error:", err);
+    return c.json({ error: "Could not read music directory" }, 500);
+  }
+
+  const totalFiles = groups.reduce((n, g) => n + g.files.length, 0);
+  return c.json({ groups, totalFiles });
+});
+
+app.post("/cleanup/apply", async (c) => {
+  if (!MUSIC_DIR || !NAVIDROME_URL) {
+    return c.json({ error: "Upload not configured (set MUSIC_DIR and NAVIDROME_URL)" }, 503);
+  }
+  const auth = authHeadersFrom(c);
+  if (!(await verifyAdmin(auth))) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+
+  let body: { folders?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid request" }, 400);
+  }
+  const selected = new Set(
+    Array.isArray(body.folders) ? body.folders.filter((f): f is string => typeof f === "string") : [],
+  );
+  if (selected.size === 0) {
+    return c.json({ error: "No albums selected" }, 400);
+  }
+
+  let entries;
+  try {
+    entries = readdirSync(MUSIC_DIR, { withFileTypes: true });
+  } catch {
+    return c.json({ error: "Could not read music directory" }, 500);
+  }
+
+  const moved: string[] = [];
+  const errors: { file: string; error: string }[] = [];
+
+  for (const ent of entries) {
+    if (!ent.isFile() || !isAudioFile(ent.name)) continue;
+    const src = join(MUSIC_DIR, ent.name);
+    // Re-derive the folder from tags rather than trusting the client, so we only
+    // ever move files into a grouping the server itself computed.
+    const tags = await readTagsFile(src);
+    const folder = albumFolder(tags);
+    if (!selected.has(folder)) continue;
+
+    const rel = `${folder}/${baseName(ent.name)}`;
+    let dest: string;
+    try {
+      dest = safeJoin(MUSIC_DIR, rel);
+    } catch {
+      errors.push({ file: ent.name, error: "Invalid path" });
+      continue;
+    }
+    if (existsSync(dest)) {
+      errors.push({ file: ent.name, error: "Target already exists" });
+      continue;
+    }
+    try {
+      mkdirSync(dirname(dest), { recursive: true });
+      try {
+        renameSync(src, dest);
+      } catch {
+        // Cross-device (different mount): fall back to copy + delete.
+        copyFileSync(src, dest);
+        unlinkSync(src);
+      }
+      moved.push(rel);
+    } catch (err) {
+      console.error("Cleanup move error:", ent.name, err);
+      errors.push({ file: ent.name, error: "Move failed" });
     }
   }
 
-  return c.json({ written, scanStarted });
+  const scanStarted = moved.length > 0 ? await triggerScan(auth) : false;
+  return c.json({ moved, errors, scanStarted });
 });
 
 // ---- Transcoded ZIP download -----------------------------------------------
