@@ -84,8 +84,12 @@ export function ToggleMenuButton(props: {
   iconSize?: number;
   heading?: string;
 }) {
+  // Non-modal so it doesn't slap aria-hidden on the page behind it. When this
+  // menu is opened from a focused trigger inside another dialog (e.g. the
+  // full-screen player), modal mode would aria-hide an ancestor of the focused
+  // element, which the browser blocks and warns about.
   return (
-    <DropdownMenu.Root>
+    <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger
         class={`icon-btn menu-trigger ${props.class ?? ""}`}
         aria-label={props.label ?? "Options"}
