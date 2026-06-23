@@ -259,6 +259,10 @@
   background: var(--content-bg);
   border-radius: var(--radius-sm);
   overflow: hidden;
+  /* In the scrolling flex column, overflow:hidden makes the automatic min-size
+     0, so without this collapsed rows get shrunk to a sliver and their content
+     is clipped away. Keep natural height and let the list scroll instead. */
+  flex-shrink: 0;
   transition: opacity 0.14s var(--ease-out);
 }
 
