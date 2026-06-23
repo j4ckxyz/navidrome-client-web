@@ -63,6 +63,46 @@ function collectFiles(fileList: FileList): UploadFile[] {
     }));
 }
 
+// Read one drag-and-drop entry (a FileSystemFileEntry or DirectoryEntry) into
+// flat [{ file, path }], walking directories recursively. `prefix` is the
+// folder path accumulated so far (ends with "/" or is empty).
+function readEntry(entry: any, prefix: string): Promise<{ file: File; path: string }[]> {
+  return new Promise((resolve) => {
+    if (entry.isFile) {
+      entry.file(
+        (file: File) => resolve([{ file, path: prefix + file.name }]),
+        () => resolve([]),
+      );
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const all: { file: File; path: string }[] = [];
+      // readEntries returns results in batches; call until it yields none.
+      const readBatch = () =>
+        reader.readEntries(async (batch: any[]) => {
+          if (batch.length === 0) {
+            resolve(all);
+            return;
+          }
+          for (const child of batch) {
+            all.push(...(await readEntry(child, `${prefix}${entry.name}/`)));
+          }
+          readBatch();
+        }, () => resolve(all));
+      readBatch();
+    } else {
+      resolve([]);
+    }
+  });
+}
+
+// Turn dropped FileSystem entries (files and/or folders) into UploadFiles,
+// keeping only audio/ZIP and preserving folder-relative paths.
+async function readDroppedEntries(entries: any[]): Promise<UploadFile[]> {
+  const out: { file: File; path: string }[] = [];
+  for (const entry of entries) out.push(...(await readEntry(entry, "")));
+  return out.filter((u) => isAudioOrZip(u.file)).map((u) => ({ file: u.file, path: u.path }));
+}
+
 export function UploadDialog(props: { onClose: () => void }) {
   const [mode, setMode] = createSignal<Mode>("upload");
 
@@ -87,8 +127,7 @@ export function UploadDialog(props: { onClose: () => void }) {
   let folderInput: HTMLInputElement | undefined;
   let zipInput: HTMLInputElement | undefined;
 
-  function addFiles(list: FileList) {
-    const next = collectFiles(list);
+  function addUploadFiles(next: UploadFile[]) {
     if (next.length === 0) return;
     setFiles((prev) => {
       const existing = new Set(prev.map((f) => f.path));
@@ -96,10 +135,29 @@ export function UploadDialog(props: { onClose: () => void }) {
     });
   }
 
-  function onDrop(e: DragEvent) {
+  function addFiles(list: FileList) {
+    addUploadFiles(collectFiles(list));
+  }
+
+  async function onDrop(e: DragEvent) {
     e.preventDefault();
     setDragOver(false);
-    if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+    const dt = e.dataTransfer;
+    if (!dt) return;
+
+    // Prefer the entries API: it's the only reliable way to accept a dropped
+    // *folder* (read recursively), and it works in WebKit/Safari where the
+    // folder <input> picker silently returns nothing. Grab the entries
+    // synchronously — DataTransfer is emptied once the handler yields.
+    const entries = Array.from(dt.items ?? [])
+      .map((it) => (it as any).webkitGetAsEntry?.() ?? null)
+      .filter(Boolean);
+    if (entries.length > 0) {
+      const collected = await readDroppedEntries(entries);
+      addUploadFiles(collected);
+      return;
+    }
+    if (dt.files) addFiles(dt.files);
   }
 
   function removeFile(path: string) {
@@ -300,8 +358,8 @@ export function UploadDialog(props: { onClose: () => void }) {
               onDrop={onDrop}
             >
               <Icon name="upload" size={28} class="upload-drop-icon" />
-              <span class="upload-drop-label">Drop files here or click to browse</span>
-              <span class="upload-drop-hint">Audio files (.mp3 .flac .ogg .m4a …) or a ZIP archive</span>
+              <span class="upload-drop-label">Drop files or a folder here, or click to browse</span>
+              <span class="upload-drop-hint">Audio files (.mp3 .flac .ogg .m4a …), a whole folder, or a ZIP archive</span>
             </div>
 
             {/* Hidden inputs */}
