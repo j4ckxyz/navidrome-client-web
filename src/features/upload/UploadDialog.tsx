@@ -403,7 +403,7 @@ export function UploadDialog(props: { onClose: () => void }) {
 
             <p class="upload-note">
               Files are filed into an <strong>“Artist – Album”</strong> folder automatically, based on
-              their tags — drop a loose pile and it still lands tidy.
+              their tags. Drop a loose pile and it still lands tidy.
             </p>
 
             {/* File list */}
@@ -460,7 +460,7 @@ export function UploadDialog(props: { onClose: () => void }) {
               </span>
               <span class="upload-result-detail">Filed into album folders in your music directory.</span>
               <Show when={result()!.scanStarted}>
-                <span class="upload-result-scan">Library scan started — new tracks will appear shortly.</span>
+                <span class="upload-result-scan">Library scan started. New tracks will appear shortly.</span>
               </Show>
               <Show when={!result()!.scanStarted}>
                 <span class="upload-result-detail muted">Trigger a scan in Navidrome to see the new tracks.</span>
@@ -509,7 +509,7 @@ export function UploadDialog(props: { onClose: () => void }) {
                   <div class="upload-result">
                     <span class="upload-result-success">Nothing to organize</span>
                     <span class="upload-result-detail">
-                      No loose files in the media root — everything is already in folders.
+                      No loose files in the media root. Everything is already in folders.
                     </span>
                   </div>
                   <div class="upload-actions">
@@ -611,7 +611,7 @@ export function UploadDialog(props: { onClose: () => void }) {
                 </span>
               </Show>
               <Show when={applyResult()!.scanStarted}>
-                <span class="upload-result-scan">Library scan started — Navidrome will re-index shortly.</span>
+                <span class="upload-result-scan">Library scan started. Navidrome will re-index shortly.</span>
               </Show>
               <Show when={!applyResult()!.scanStarted && applyResult()!.moved.length > 0}>
                 <span class="upload-result-detail muted">Trigger a scan in Navidrome to re-index.</span>

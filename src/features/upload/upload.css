@@ -231,14 +231,17 @@
 }
 
 /* ---- Indeterminate progress (organize scan/apply) ---- */
+/* Slide with transform, never a layout property (margin), so it composites
+   cleanly. The track is 100% wide and this fill is 35%, so a full pass runs
+   from just off the left to just off the right: -100% → 286% of its own width. */
 .upload-progress-indeterminate {
-  width: 35% !important;
+  width: 35%;
   border-radius: 2px;
   animation: upload-indeterminate 1.1s var(--ease-out) infinite;
 }
 @keyframes upload-indeterminate {
-  0% { margin-left: -35%; }
-  100% { margin-left: 100%; }
+  from { transform: translateX(-100%); }
+  to { transform: translateX(286%); }
 }
 
 /* ---- Organize: album groups ---- */
@@ -273,6 +276,16 @@
 .upload-group-head {
   display: flex;
   align-items: stretch;
+  transition: background 0.14s var(--ease-out);
+}
+
+/* Reveal the row as interactive on hover, and lift the disclosure chevron from
+   muted to full — controls recede until you reach for them. */
+.upload-group-head:hover {
+  background: var(--surface-hover);
+}
+.upload-group-head:hover .upload-group-chevron {
+  color: var(--text);
 }
 
 .upload-group-check {
@@ -324,7 +337,8 @@
 }
 
 .upload-group-tag-warn {
-  color: var(--danger);
+  /* A caveat (these land under "Unknown Artist"), not an error — warning, not danger. */
+  color: var(--warning);
   font-weight: 400;
 }
 
@@ -339,7 +353,9 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 0 12px 10px 33px;
+  /* Left pad aligns the file list under the album title: 35px checkbox cell
+     + 15px chevron + 8px gap. */
+  padding: 2px 12px 12px 58px;
 }
 
 .upload-group-file {
