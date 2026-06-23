@@ -592,6 +592,11 @@ async function proxy(c: Parameters<Parameters<typeof app.all>[1]>[0]): Promise<R
     "authorization",
     "x-nd-authorization",
     "x-nd-client-unique-id",
+    // Conditional revalidation: let the browser's cached cover art (and other
+    // cacheable responses) revalidate against Navidrome and get a cheap 304
+    // instead of a full re-download + image resize.
+    "if-none-match",
+    "if-modified-since",
   ]) {
     const val = c.req.header(key);
     if (val) reqHeaders[key] = val;
@@ -621,6 +626,19 @@ async function proxy(c: Parameters<Parameters<typeof app.all>[1]>[0]): Promise<R
   ]) {
     const val = upstream.headers.get(key);
     if (val) resHeaders[key] = val;
+  }
+
+  // Pass through Navidrome's cache directives for binary media (cover art,
+  // audio) only — never for JSON, so dynamic library data can't get
+  // heuristically cached and go stale. Cover URLs are content-hashed, so the
+  // browser can safely cache them; without this it refetched every cover on
+  // each render/scroll/navigation, hammering the resizer into 502s.
+  const contentType = upstream.headers.get("content-type") ?? "";
+  if (/^(image|audio)\//i.test(contentType)) {
+    for (const key of ["cache-control", "etag", "last-modified", "expires", "vary", "age"]) {
+      const val = upstream.headers.get(key);
+      if (val) resHeaders[key] = val;
+    }
   }
 
   return new Response(upstream.body, { status: upstream.status, headers: resHeaders });
