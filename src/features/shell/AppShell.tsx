@@ -12,6 +12,8 @@ import { installSpatialNav } from "./spatialNav";
 import { NowPlayingBar } from "~/features/player/NowPlayingBar";
 import { FullScreenPlayer } from "~/features/player/FullScreenPlayer";
 import { isFullScreen } from "~/features/player/fullscreen";
+import { VisualizerStage } from "~/features/visualizer/VisualizerStage";
+import { isVisualizerOpen } from "~/features/visualizer/state";
 import { QueuePanel } from "~/features/player/QueuePanel";
 import { LyricsPanel } from "~/features/player/LyricsPanel";
 import { AddToPlaylistDialog } from "~/features/playlists/addToPlaylist";
@@ -111,6 +113,9 @@ export function AppShell(props: { children?: JSX.Element }) {
       <MobileNav />
       <Show when={isFullScreen()}>
         <FullScreenPlayer />
+      </Show>
+      <Show when={isVisualizerOpen()}>
+        <VisualizerStage />
       </Show>
       <AddToPlaylistDialog />
       <DownloadDialog />

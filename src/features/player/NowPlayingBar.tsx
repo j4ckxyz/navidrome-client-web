@@ -7,6 +7,7 @@ import { createMemo, createSignal, Show } from "solid-js";
 import { player } from "~/player/store";
 import { settings, updateSettings } from "~/settings/store";
 import { openFullScreen } from "./fullscreen";
+import { openVisualizer } from "~/features/visualizer/state";
 import { isStarred, toggleStar } from "~/features/stars";
 import { CoverArt } from "~/ui/CoverArt";
 import { Icon } from "~/ui/Icon";
@@ -144,6 +145,14 @@ export function NowPlayingBar() {
       </div>
 
       <div class="np-right">
+        <button
+          class="icon-btn"
+          onClick={() => openVisualizer()}
+          aria-label="Open visualiser"
+          title="Visualiser"
+        >
+          <Icon name="atom" size={18} />
+        </button>
         <button
           class="icon-btn"
           classList={{ active: settings.layout.showLyricsPanel }}

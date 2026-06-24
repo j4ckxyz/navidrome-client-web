@@ -1,6 +1,7 @@
 import { Show, type Component, type JSX } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import {
+  Atom,
   Calendar,
   Check,
   ChevronRight,
@@ -97,6 +98,7 @@ export type IconName =
   | "sparkles"
   | "waves"
   | "image"
+  | "atom"
   | "sliders";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -153,6 +155,7 @@ const LUCIDE_MAP: Record<IconName, LucideComp> = {
   sparkles: Sparkles,
   waves: Waves,
   image: Image,
+  atom: Atom,
   sliders: SlidersHorizontal,
 };
 

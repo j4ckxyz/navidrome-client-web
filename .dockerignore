@@ -8,3 +8,10 @@ dist
 README.md
 PRODUCT.md
 DESIGN.md
+
+# Dev-only visual test assets — never needed in the production image.
+e2e
+playwright.config.ts
+viz-harness.html
+test-results
+playwright-report

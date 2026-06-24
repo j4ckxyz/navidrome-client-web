@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Visualiser Harness</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        overflow: hidden;
+      }
+      #viz-canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+      /* Off-screen status flag the test polls; not meant to be seen. */
+      #viz-status {
+        position: fixed;
+        bottom: 4px;
+        left: 4px;
+        color: #333;
+        font: 11px monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="viz-canvas"></canvas>
+    <audio id="viz-audio"></audio>
+    <span id="viz-status">init</span>
+    <script type="module" src="/src/features/visualizer/harness.ts"></script>
+  </body>
+</html>

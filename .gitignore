@@ -4,6 +4,8 @@ dist
 .DS_Store
 .vite
 bun.lockb
+test-results
+playwright-report
 
 # Local secrets — never commit real server credentials
 .env

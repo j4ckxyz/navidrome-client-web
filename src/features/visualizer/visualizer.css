@@ -1,0 +1,168 @@
+/* Immersive visualiser overlay. Sits above the full-screen player so it can be
+   opened from anywhere, fills the viewport, and fades its chrome when idle. */
+
+.viz-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: #000;
+  overflow: hidden;
+  cursor: default;
+  animation: viz-fade-in 0.32s var(--ease-out, ease);
+}
+
+@keyframes viz-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.viz-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Control chrome floats over the canvas and ignores pointer events except on the
+   actual buttons, so a click anywhere on the field still exits. */
+.viz-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(16px, 3vw, 32px);
+  transition: opacity 0.4s var(--ease-out, ease);
+}
+
+.viz-controls > * {
+  pointer-events: auto;
+}
+
+.viz-controls-hidden .viz-controls {
+  opacity: 0;
+}
+.viz-controls-hidden .viz-stage,
+.viz-controls-hidden {
+  cursor: none;
+}
+
+.viz-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Segmented mode switch. */
+.viz-modes {
+  display: inline-flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.viz-mode-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font: inherit;
+  font-weight: var(--fw-medium, 500);
+  font-size: 0.85rem;
+  padding: 7px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.18s var(--ease-out, ease), color 0.18s var(--ease-out, ease);
+}
+
+.viz-mode-btn:hover {
+  color: #fff;
+}
+
+.viz-mode-btn.active {
+  background: rgba(255, 255, 255, 0.92);
+  color: #111;
+}
+
+.viz-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.viz-icon-btn {
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: background 0.18s var(--ease-out, ease), color 0.18s var(--ease-out, ease);
+}
+
+.viz-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.viz-bottom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.viz-nowplaying {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.6);
+}
+
+.viz-track {
+  color: #fff;
+  font-weight: var(--fw-semibold, 600);
+  font-size: 1.05rem;
+}
+
+.viz-artist {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9rem;
+}
+
+.viz-hint {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.95rem;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.6);
+}
+
+.viz-note {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.78rem;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viz-stage {
+    animation: none;
+  }
+}
