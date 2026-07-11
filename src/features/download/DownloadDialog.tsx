@@ -6,6 +6,7 @@
 import { Dialog } from "@kobalte/core";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import type { Song } from "~/api/types";
+import { client } from "~/auth/session";
 import { Icon } from "~/ui/Icon";
 import { proxyMode } from "~/lib/serverConfig";
 import { formatCount } from "~/lib/format";
@@ -42,12 +43,21 @@ function subtitle(t: DownloadTarget): string {
 }
 
 export function DownloadDialog() {
+  // Whole-collection downloads need a server that can bundle the files. Navidrome
+  // zips them (originals server-side, lossy via our proxy); Jellyfin can't, so
+  // only single tracks are downloadable there.
+  const collectionSupported = createMemo(() => {
+    const t = target();
+    if (!t || t.kind === "song") return true;
+    return client()?.canDownloadCollections ?? false;
+  });
+
   // Lossy options for a whole collection are only possible when our backend can
   // transcode + zip server-side (proxy mode). Single songs transcode anywhere.
   const allowLossy = createMemo(() => {
     const t = target();
     if (!t) return true;
-    return t.kind === "song" || proxyMode();
+    return t.kind === "song" || (collectionSupported() && proxyMode());
   });
 
   const qualities = createMemo(() =>
@@ -108,25 +118,35 @@ export function DownloadDialog() {
               )}
             </Show>
 
-            <div class="dl-qualities">
-              <For each={qualities()}>
-                {(q) => (
-                  <button class="dl-quality" disabled={busy()} onClick={() => choose(q)}>
-                    <Icon name="download" size={16} />
-                    <span class="dl-quality-text">
-                      <span class="dl-quality-label">{q.label}</span>
-                      <span class="muted">{q.sub}</span>
-                    </span>
-                  </button>
-                )}
-              </For>
-            </div>
+            <Show
+              when={collectionSupported()}
+              fallback={
+                <p class="dl-note muted">
+                  Whole-{target()?.kind} downloads aren't available on Jellyfin.
+                  You can still download individual tracks from a track's menu.
+                </p>
+              }
+            >
+              <div class="dl-qualities">
+                <For each={qualities()}>
+                  {(q) => (
+                    <button class="dl-quality" disabled={busy()} onClick={() => choose(q)}>
+                      <Icon name="download" size={16} />
+                      <span class="dl-quality-text">
+                        <span class="dl-quality-label">{q.label}</span>
+                        <span class="muted">{q.sub}</span>
+                      </span>
+                    </button>
+                  )}
+                </For>
+              </div>
 
-            <Show when={target() && target()!.kind !== "song" && !proxyMode()}>
-              <p class="dl-note muted">
-                Transcoded (lossy) downloads of a whole {target()!.kind} need the
-                bundled server in proxy mode. Original quality is available now.
-              </p>
+              <Show when={target() && target()!.kind !== "song" && !proxyMode()}>
+                <p class="dl-note muted">
+                  Transcoded (lossy) downloads of a whole {target()!.kind} need the
+                  bundled server in proxy mode. Original quality is available now.
+                </p>
+              </Show>
             </Show>
           </Dialog.Content>
         </div>

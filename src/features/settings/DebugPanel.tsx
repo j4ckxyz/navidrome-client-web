@@ -6,7 +6,7 @@ import { client } from "~/auth/session";
 import { Icon } from "~/ui/Icon";
 import "./debug-panel.css";
 
-const ENDPOINTS = [
+const SUBSONIC_ENDPOINTS = [
   { endpoint: "ping.view", label: "ping" },
   { endpoint: "getArtists.view", label: "getArtists" },
   { endpoint: "getAlbumList2.view", label: "getAlbumList2 (newest)", params: { type: "newest", size: 5 } },
@@ -16,17 +16,28 @@ const ENDPOINTS = [
   { endpoint: "getScanStatus.view", label: "getScanStatus" },
 ];
 
+const JELLYFIN_ENDPOINTS = [
+  { endpoint: "System/Info", label: "System/Info" },
+  { endpoint: "Artists/AlbumArtists", label: "AlbumArtists" },
+  { endpoint: "Items", label: "Albums (newest)", params: { IncludeItemTypes: "MusicAlbum", Recursive: "true", SortBy: "DateCreated", SortOrder: "Descending", Limit: 5 } },
+  { endpoint: "MusicGenres", label: "MusicGenres" },
+];
+
 export function DebugPanel() {
   const [output, setOutput] = createSignal<string>("");
   const [loading, setLoading] = createSignal(false);
   const [activeUrl, setActiveUrl] = createSignal("");
+
+  const endpoints = () =>
+    client()?.serverType === "jellyfin" ? JELLYFIN_ENDPOINTS : SUBSONIC_ENDPOINTS;
 
   async function run(endpoint: string, params?: Record<string, string | number>) {
     const c = client();
     if (!c) return;
     setLoading(true);
     const url = c.buildUrl(endpoint, params ?? {});
-    setActiveUrl(url.replace(/([?&](t|s)=)[^&]*/g, "$1•••")); // mask token/salt
+    // Mask secrets: Subsonic token/salt and Jellyfin api_key.
+    setActiveUrl(url.replace(/([?&](t|s|api_key)=)[^&]*/g, "$1•••"));
     try {
       const res = await fetch(url);
       const json = await res.json();
@@ -41,7 +52,7 @@ export function DebugPanel() {
   return (
     <div class="debug-panel">
       <div class="debug-endpoints">
-        <For each={ENDPOINTS}>
+        <For each={endpoints()}>
           {(ep) => (
             <button class="btn debug-ep" onClick={() => run(ep.endpoint, ep.params)}>
               {ep.label}

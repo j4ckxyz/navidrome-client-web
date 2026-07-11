@@ -46,6 +46,47 @@
   font-size: 13px;
 }
 
+.login-servertype {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  margin-bottom: 20px;
+  background: var(--content-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.login-servertype-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px;
+  border-radius: calc(var(--radius) - 3px);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: background 0.15s var(--ease-out), color 0.15s var(--ease-out);
+}
+.login-servertype-btn:hover {
+  color: var(--content-text);
+}
+.login-servertype-btn.active {
+  background: var(--surface);
+  color: var(--content-text);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.15));
+}
+
+.login-known-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--accent) 24%, var(--surface));
+  color: var(--content-text);
+}
+
 .login-form {
   display: flex;
   flex-direction: column;
