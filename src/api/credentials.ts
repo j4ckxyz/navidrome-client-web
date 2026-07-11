@@ -5,19 +5,43 @@
 
 import { md5, randomSalt } from "./md5";
 import { ApiError, type NativeLoginResponse } from "./types";
+import type { ServerType } from "./MusicClient";
 
 const STORAGE_PREFIX = "nd:auth:";
 const ACTIVE_KEY = "nd:auth:active";
+const DEVICE_ID_KEY = "nd:device-id";
 
 export interface ServerCredentials {
+  // Which backend this login targets. Absent in records saved before Jellyfin
+  // support existed — loadCredentials() defaults those to "navidrome" so users
+  // stay logged in across an update.
+  serverType: ServerType;
   serverUrl: string; // normalized, no trailing slash
   username: string;
-  authMethod: "native" | "subsonic";
+  authMethod: "native" | "subsonic" | "jellyfin";
+  // Subsonic / Navidrome auth. Empty strings for Jellyfin logins.
   subsonicSalt: string;
   subsonicToken: string;
   jwt?: string; // native JWT, refreshed from response headers
+  // Jellyfin auth.
+  accessToken?: string;
+  userId?: string;
+  deviceId?: string;
   isAdmin?: boolean;
   savedAt: number;
+}
+
+// A stable per-browser device id, required by Jellyfin's auth + session APIs.
+// Persisted so the same browser keeps one identity across logins.
+export function getDeviceId(): string {
+  let id = localStorage.getItem(DEVICE_ID_KEY);
+  if (!id) {
+    id =
+      globalThis.crypto?.randomUUID?.() ??
+      `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(DEVICE_ID_KEY, id);
+  }
+  return id;
 }
 
 export function normalizeServerUrl(raw: string): string {
@@ -48,7 +72,12 @@ export function loadCredentials(serverUrl: string): ServerCredentials | null {
   const raw = localStorage.getItem(storageKey(serverUrl));
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as ServerCredentials;
+    const creds = JSON.parse(raw) as ServerCredentials;
+    // Backwards compat: records saved before Jellyfin support have no
+    // serverType. They were all Navidrome, so default them to keep the user
+    // logged in seamlessly after an update.
+    if (!creds.serverType) creds.serverType = "navidrome";
+    return creds;
   } catch {
     return null;
   }
@@ -121,6 +150,7 @@ export async function loginNative(
     throw new ApiError("Server response missing Subsonic credentials");
   }
   return {
+    serverType: "navidrome",
     serverUrl,
     username: data.username,
     authMethod: "native",
@@ -167,6 +197,7 @@ export async function loginSubsonic(
     throw new ApiError(msg, sub?.error?.code, true);
   }
   return {
+    serverType: "navidrome",
     serverUrl,
     username,
     authMethod: "subsonic",
@@ -200,11 +231,81 @@ export async function loginWithToken(
     throw new ApiError(sub?.error?.message ?? "Token rejected", sub?.error?.code, true);
   }
   return {
+    serverType: "navidrome",
     serverUrl,
     username,
     authMethod: "subsonic",
     subsonicSalt: salt,
     subsonicToken: token,
+    savedAt: Date.now(),
+  };
+}
+
+// --- Jellyfin ---------------------------------------------------------------
+
+const JELLYFIN_CLIENT = "Navidrome Web";
+const JELLYFIN_VERSION = "1.0.0";
+
+// The X-Emby-Authorization header Jellyfin expects on auth (and accepts on every
+// request). Carries the client identity + this browser's device id.
+export function jellyfinAuthHeader(deviceId: string, token?: string): string {
+  const parts = [
+    `MediaBrowser Client="${JELLYFIN_CLIENT}"`,
+    `Device="Browser"`,
+    `DeviceId="${deviceId}"`,
+    `Version="${JELLYFIN_VERSION}"`,
+  ];
+  if (token) parts.push(`Token="${token}"`);
+  return parts.join(", ");
+}
+
+// Password login against a Jellyfin server. Returns an access token + the user
+// id everything else is scoped to.
+export async function loginJellyfin(
+  serverUrl: string,
+  username: string,
+  password: string,
+): Promise<ServerCredentials> {
+  const deviceId = getDeviceId();
+  let res: Response;
+  try {
+    res = await fetch(`${serverUrl}/Users/AuthenticateByName`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Emby-Authorization": jellyfinAuthHeader(deviceId),
+      },
+      body: JSON.stringify({ Username: username, Pw: password }),
+    });
+  } catch {
+    throw new ApiError(
+      `Could not reach ${serverUrl}. Check the URL and that the server allows this origin (CORS).`,
+    );
+  }
+  if (res.status === 401) {
+    throw new ApiError("Invalid username or password", 401, true);
+  }
+  if (!res.ok) {
+    throw new ApiError(`Login failed (HTTP ${res.status})`, res.status);
+  }
+  const data = (await res.json()) as {
+    AccessToken?: string;
+    User?: { Id?: string; Name?: string; Policy?: { IsAdministrator?: boolean } };
+  };
+  if (!data.AccessToken || !data.User?.Id) {
+    throw new ApiError("Server response missing access token");
+  }
+  return {
+    serverType: "jellyfin",
+    serverUrl,
+    username: data.User.Name ?? username,
+    authMethod: "jellyfin",
+    subsonicSalt: "",
+    subsonicToken: "",
+    accessToken: data.AccessToken,
+    userId: data.User.Id,
+    deviceId,
+    isAdmin: data.User.Policy?.IsAdministrator ?? false,
     savedAt: Date.now(),
   };
 }

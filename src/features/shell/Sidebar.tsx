@@ -57,7 +57,9 @@ export function Sidebar(props: { onUpload?: () => void; onNavigate?: () => void 
         <span class="sidebar-logo">
           <Icon name="disc" size={22} />
         </span>
-        <span class="sidebar-brand-name">Navidrome</span>
+        <span class="sidebar-brand-name">
+          {client()?.serverType === "jellyfin" ? "Jellyfin" : "Navidrome"}
+        </span>
       </A>
 
       <div class="sidebar-nav">
@@ -124,7 +126,7 @@ export function Sidebar(props: { onUpload?: () => void; onNavigate?: () => void 
             </span>
           </span>
         </button>
-        <Show when={isAdmin() && uploadEnabled()}>
+        <Show when={isAdmin() && uploadEnabled() && client()?.serverType === "navidrome"}>
           <button
             class="icon-btn"
             onClick={() => { go(); props.onUpload?.(); }}

@@ -4,9 +4,12 @@
 
 import { createSignal } from "solid-js";
 import { SubsonicClient } from "~/api/client";
+import { JellyfinClient } from "~/api/jellyfin";
+import type { MusicClient, ServerType } from "~/api/MusicClient";
 import {
   clearCredentials,
   loadActiveCredentials,
+  loginJellyfin,
   loginNative,
   loginSubsonic,
   loginWithToken,
@@ -16,7 +19,7 @@ import {
   type ServerCredentials,
 } from "~/api/credentials";
 
-const [client, setClient] = createSignal<SubsonicClient | null>(null);
+const [client, setClient] = createSignal<MusicClient | null>(null);
 const [reauthRequired, setReauthRequired] = createSignal(false);
 const [activeServerUrl, setActiveServerUrl] = createSignal<string | null>(null);
 const [activeUsername, setActiveUsername] = createSignal<string | null>(null);
@@ -24,10 +27,11 @@ const [isAdmin, setIsAdmin] = createSignal(false);
 
 export { client, reauthRequired, activeServerUrl, activeUsername, isAdmin };
 
-function buildClient(creds: ServerCredentials): SubsonicClient {
-  return new SubsonicClient(creds, {
-    onAuthError: () => setReauthRequired(true),
-  });
+function buildClient(creds: ServerCredentials): MusicClient {
+  const opts = { onAuthError: () => setReauthRequired(true) };
+  return creds.serverType === "jellyfin"
+    ? new JellyfinClient(creds, opts)
+    : new SubsonicClient(creds, opts);
 }
 
 // Restore a previous session on boot, if any.
@@ -44,10 +48,11 @@ export function initSession(): void {
 export type LoginMethod = "auto" | "native" | "subsonic";
 
 export interface LoginParams {
+  serverType?: ServerType;
   serverUrl: string;
   username: string;
   password?: string;
-  // Direct token auth: provide both.
+  // Direct token auth (Navidrome/Subsonic only): provide both.
   salt?: string;
   token?: string;
   method?: LoginMethod;
@@ -57,7 +62,10 @@ export async function login(params: LoginParams): Promise<void> {
   const serverUrl = normalizeServerUrl(params.serverUrl);
   let creds: ServerCredentials;
 
-  if (params.salt && params.token) {
+  if (params.serverType === "jellyfin") {
+    if (!params.password) throw new Error("Provide a password");
+    creds = await loginJellyfin(serverUrl, params.username, params.password);
+  } else if (params.salt && params.token) {
     creds = await loginWithToken(serverUrl, params.username, params.salt, params.token);
   } else if (params.password) {
     const method = params.method ?? "auto";
@@ -107,7 +115,7 @@ export function logout(): void {
 }
 
 // Require a non-null client. Components under the authed shell can rely on this.
-export function requireClient(): SubsonicClient {
+export function requireClient(): MusicClient {
   const c = client();
   if (!c) throw new Error("No active session");
   return c;

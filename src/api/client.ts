@@ -19,43 +19,34 @@ import {
   type StructuredLyrics,
 } from "./types";
 import { updateJwt, type ServerCredentials } from "./credentials";
+import type {
+  AlbumListType,
+  ClientOptions,
+  LibraryStats,
+  MusicClient,
+  ServerType,
+} from "./MusicClient";
+
+// Re-exported for existing importers of these from "~/api/client".
+export type { AlbumListType, LibraryStats };
 
 const API_VERSION = "1.16.1";
 const CLIENT_NAME = "navidrome-web";
 
-export type AlbumListType =
-  | "newest"
-  | "recent"
-  | "frequent"
-  | "random"
-  | "starred"
-  | "alphabeticalByName"
-  | "alphabeticalByArtist"
-  | "byYear"
-  | "byGenre";
-
-interface ClientOptions {
-  onAuthError?: (creds: ServerCredentials) => void;
-}
-
-export interface LibraryStats {
-  artistCount: number;
-  albumCount: number;
-  songCount: number;
-  // Total size on disk in bytes. Undefined when it couldn't be determined
-  // (Subsonic exposes no size totals; needs Navidrome's native API).
-  totalSize?: number;
-}
-
-export class SubsonicClient {
+export class SubsonicClient implements MusicClient {
   constructor(
     private creds: ServerCredentials,
     private opts: ClientOptions = {},
   ) {}
 
+  readonly serverType: ServerType = "navidrome";
+
   get serverUrl(): string {
     return this.creds.serverUrl;
   }
+
+  // Navidrome zips whole albums/playlists server-side (download.view).
+  readonly canDownloadCollections = true;
 
   get username(): string {
     return this.creds.username;

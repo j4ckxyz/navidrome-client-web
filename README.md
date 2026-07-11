@@ -1,8 +1,10 @@
 # Navidrome Web Client
 
-A modern, **desktop-first** web client for [Navidrome](https://www.navidrome.org/). It runs entirely in the browser, talks directly to your existing Navidrome server over its Subsonic/OpenSubsonic and native APIs, and keeps all durable state (playlists, favourites, play counts) **on the server** so it stays in sync with your other clients.
+A modern, **desktop-first** web client for [Navidrome](https://www.navidrome.org/) **and [Jellyfin](https://jellyfin.org/)** (music only). It runs entirely in the browser, talks directly to your existing server — Navidrome over its Subsonic/OpenSubsonic and native APIs, or Jellyfin over its native API — and keeps all durable state (playlists, favourites, play counts) **on the server** so it stays in sync with your other clients.
 
-There is **no database**, and in its simplest form **no backend** — the app is a static bundle and everything happens in your browser. An optional thin proxy server ships in the Docker image to avoid CORS and (for admins) enable uploads; see [Running with Docker](#running-with-docker-recommended).
+At login you pick which server you're connecting to; the choice is stored with your credentials so the app knows which API to use. Existing Navidrome logins keep working unchanged across an update — to try Jellyfin, just log out and log back in with the Jellyfin option. (Only Jellyfin's music library is used — films and TV are never touched.)
+
+There is **no database**, and in its simplest form **no backend** — the app is a static bundle and everything happens in your browser. An optional thin proxy server ships in the Docker image to avoid CORS and (for admins) enable uploads; see [Running with Docker](#running-with-docker-recommended). The proxy and admin upload are Navidrome-only; Jellyfin connects directly and needs [CORS enabled](https://jellyfin.org/docs/general/networking/) for this app's origin.
 
 > Designed for desktop browsers only: wide multi-pane layouts, hover states, right-click context menus, and keyboard shortcuts. Good iOS/Android clients already exist, so mobile layouts are intentionally out of scope.
 
