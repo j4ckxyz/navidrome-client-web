@@ -1,0 +1,70 @@
+/* Music-video results: 16:9 thumbnails in a responsive row. */
+
+.mv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px 14px;
+}
+
+.mv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  border-radius: var(--radius);
+  padding: 8px;
+  transition: background 0.16s var(--ease-out);
+}
+.mv-card:hover {
+  background: var(--surface);
+}
+
+.mv-thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+.mv-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mv-card-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.16s var(--ease-out);
+}
+.mv-card:hover .mv-card-play {
+  opacity: 1;
+}
+@media (hover: none) {
+  .mv-card-play {
+    opacity: 1;
+    background: transparent;
+  }
+}
+
+.mv-card-title {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mv-card-artist {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
