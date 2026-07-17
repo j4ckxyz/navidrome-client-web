@@ -7,7 +7,7 @@ import { createQuery } from "@tanstack/solid-query";
 import { useSearchParams } from "@solidjs/router";
 import { createMemo, For, Show } from "solid-js";
 import { client } from "~/auth/session";
-import { jellyfin, jellyfinImageUrl, searchMusicVideos, type JellyfinItem } from "~/api/jellyfin";
+import { jellyfin, jellyfinImageUrl, searchMusicVideos, type JellyfinItem } from "~/api/jellyfinExtras";
 import { openMusicVideo } from "~/features/player/musicVideo";
 import { smartSearch } from "~/lib/smartSearch";
 import { fuzzyScore } from "~/lib/fuzzy";

@@ -8,6 +8,7 @@ import { useParams } from "@solidjs/router";
 import { client } from "~/auth/session";
 import { player } from "~/player/store";
 import { openFullScreen } from "~/features/player/fullscreen";
+import { openVisualizer } from "~/features/visualizer/state";
 
 export default function Listen() {
   const params = useParams();
@@ -24,7 +25,8 @@ export default function Listen() {
         // Unknown/foreign id: still open the player on whatever is queued.
       }
     }
-    openFullScreen(params.view === "visualiser" ? "visualiser" : "player");
+    if (params.view === "visualiser") openVisualizer();
+    else openFullScreen();
   });
 
   return <div class="page" aria-hidden="true" />;

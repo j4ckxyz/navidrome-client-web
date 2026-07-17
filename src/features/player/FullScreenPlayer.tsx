@@ -13,14 +13,8 @@ import { settings, updateSettings } from "~/settings/store";
 import { isStarred, toggleStar } from "~/features/stars";
 import { extractColors, distinctColours } from "~/lib/colorExtract";
 import { hexToRgb, rgbToOklch, oklch } from "~/theme/colors";
-import {
-  artistSlug,
-  closeFullScreen,
-  fsView,
-  getReturnPath,
-  rememberReturnPath,
-  setFsView,
-} from "./fullscreen";
+import { artistSlug, closeFullScreen, getReturnPath, rememberReturnPath } from "./fullscreen";
+import { isVisualizerOpen } from "~/features/visualizer/state";
 import { currentMusicVideo, openMusicVideo } from "./musicVideo";
 import { Visualizer } from "./Visualizer";
 import { CoverArt } from "~/ui/CoverArt";
@@ -58,14 +52,14 @@ export function FullScreenPlayer() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // URL sync: the full-screen player lives at /listen/:artist/:id, the
-  // visualiser display at /listen/:artist/:id/visualiser — every state is a
-  // shareable address. First entry remembers where to return on close; song
-  // changes and view switches replace the entry rather than piling up history.
+  // URL sync: the full-screen player lives at /listen/:artist/:id — every
+  // state is a shareable address. First entry remembers where to return on
+  // close; song changes replace the entry rather than piling up history. The
+  // visualiser stage owns the /visualiser suffix, so yield while it's open.
   createEffect(() => {
     const s = song();
-    if (!s || leaving()) return;
-    const target = `/listen/${artistSlug(s.artist)}/${s.id}${fsView() === "visualiser" ? "/visualiser" : ""}`;
+    if (!s || leaving() || isVisualizerOpen()) return;
+    const target = `/listen/${artistSlug(s.artist)}/${s.id}`;
     if (location.pathname === target) return;
     const inListen = location.pathname.startsWith("/listen/");
     if (!inListen) rememberReturnPath(location.pathname + location.search);
@@ -210,7 +204,6 @@ export function FullScreenPlayer() {
         "fs-leaving": leaving(),
         "fs-static": !settings.layout.fullScreenVisualizer,
         "fs-has-mesh": !!mesh(),
-        "fs-viz-mode": fsView() === "visualiser",
       }}
       role="dialog"
       aria-modal="true"
@@ -250,16 +243,6 @@ export function FullScreenPlayer() {
             label="Display options"
             heading="Display"
             items={[
-              {
-                label: "Visualiser focus",
-                icon: "sparkles",
-                checked: fsView() === "visualiser",
-                onChange: (v) => {
-                  setFsView(v ? "visualiser" : "player");
-                  // The focus view is about the waves — make sure they're on.
-                  if (v) updateSettings((s) => (s.layout.fullScreenVisualizer = true));
-                },
-              },
               {
                 label: "Waveform",
                 icon: "waves",

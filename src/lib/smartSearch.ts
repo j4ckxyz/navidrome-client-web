@@ -5,7 +5,7 @@
 // already cached for the Artists page — is folded in as a typo-tolerant
 // artist index for free.
 
-import type { SubsonicClient } from "~/api/client";
+import type { MusicClient } from "~/api/MusicClient";
 import type { Album, ArtistSummary, SearchResult, Song } from "~/api/types";
 import { fuzzyScore, queryVariants } from "./fuzzy";
 
@@ -46,7 +46,7 @@ function albumScore(q: string, a: Album): number {
 }
 
 export async function smartSearch(
-  client: SubsonicClient,
+  client: MusicClient,
   query: string,
   allArtists?: ArtistSummary[],
 ): Promise<SearchResult> {

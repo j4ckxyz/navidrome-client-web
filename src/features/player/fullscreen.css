@@ -390,13 +390,3 @@
 .fs-has-mesh .fs-scrim {
   opacity: 0.5;
 }
-
-/* Visualiser focus (/listen/…/visualiser): art and lyric give way to the
-   waves; title/info anchor to the bottom like a projection screen. */
-.fs-viz-mode .fs-art,
-.fs-viz-mode .fs-lyric {
-  display: none;
-}
-.fs-viz-mode .fs-info {
-  margin-top: auto;
-}

@@ -8,8 +8,10 @@
 // we say so plainly rather than pretending it's reacting to the music.
 
 import { createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { useLocation, useNavigate } from "@solidjs/router";
 import { player } from "~/player/store";
 import { client } from "~/auth/session";
+import { artistSlug, getReturnPath, rememberReturnPath } from "~/features/player/fullscreen";
 import { extractColors, distinctColours } from "~/lib/colorExtract";
 import { Icon } from "~/ui/Icon";
 import { createVizLoop } from "./loop";
@@ -30,6 +32,32 @@ export function VisualizerStage() {
   const [palette, setPalette] = createSignal<RGB[]>(DEFAULT_PALETTE);
   const [controlsVisible, setControlsVisible] = createSignal(true);
   const [isNativeFs, setIsNativeFs] = createSignal(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // URL sync: the stage lives at /listen/:artist/:id/visualiser, a shareable
+  // address. Song changes replace the entry; closing (unmount) restores the
+  // route we came from, and browser back closes the stage.
+  createEffect(() => {
+    const s = song();
+    if (!s) return;
+    const target = `/listen/${artistSlug(s.artist)}/${s.id}/visualiser`;
+    if (location.pathname === target) return;
+    const inListen = location.pathname.startsWith("/listen/");
+    if (!inListen) rememberReturnPath(location.pathname + location.search);
+    navigate(target, { replace: inListen });
+  });
+  let wasOnVizUrl = false;
+  createEffect(() => {
+    const onVizUrl = location.pathname.endsWith("/visualiser");
+    if (wasOnVizUrl && !onVizUrl) closeVisualizer();
+    wasOnVizUrl = onVizUrl;
+  });
+  onCleanup(() => {
+    if (location.pathname.endsWith("/visualiser")) {
+      navigate(getReturnPath(), { replace: true });
+    }
+  });
 
   // Was the analyser actually available? If not, we're on the synth fallback.
   const analyser = player.enableVisualizer();
