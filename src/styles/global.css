@@ -297,3 +297,34 @@ img {
   color: var(--text-muted);
   text-align: center;
 }
+
+/* ---------------------------------------------------------------------------
+   Touch / installed-app (PWA) polish.
+   --------------------------------------------------------------------------- */
+
+/* No blue tap flashes; keep pull-to-refresh from hijacking in-app scrolling. */
+html {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+@media (max-width: 760px) {
+  /* iOS zooms the page when a focused input's font-size is under 16px. */
+  .input,
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+
+  /* Notch/status-bar clearance when installed (viewport-fit=cover). */
+  .app-content {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .sidebar-inner {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .fs-player {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}

@@ -810,6 +810,7 @@ const MIME: Record<string, string> = {
   webp: "image/webp",
   ico: "image/x-icon",
   json: "application/json",
+  webmanifest: "application/manifest+json",
   woff: "font/woff",
   woff2: "font/woff2",
   txt: "text/plain",
@@ -861,12 +862,14 @@ app.all("*", async (c) => {
     if (await file.exists()) {
       const isHtml = candidate.endsWith(".html");
       const isHashed = pathname.startsWith("/assets/");
+      // The service worker must revalidate on every check or deploys stall.
+      const noStore = isHtml || pathname === "/sw.js";
       return new Response(file, {
         headers: {
           "Content-Type": mimeOf(candidate),
           "Cache-Control": isHashed
             ? "public, max-age=31536000, immutable"
-            : isHtml
+            : noStore
               ? "no-cache, no-store, must-revalidate"
               : "public, max-age=600",
         },
