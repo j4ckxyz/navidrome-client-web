@@ -169,3 +169,12 @@
 .track-row:hover .track-more {
   opacity: 1;
 }
+
+/* Deep-linked track (/song/:id): a soft pulse so the eye lands on the row. */
+.track-row-highlight {
+  animation: track-highlight 2.4s var(--ease-out) 2;
+}
+@keyframes track-highlight {
+  0%, 100% { background: transparent; }
+  30% { background: color-mix(in oklab, var(--accent) 18%, transparent); }
+}

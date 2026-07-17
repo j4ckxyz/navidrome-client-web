@@ -2,7 +2,7 @@
 // grouped by disc when multi-disc.
 
 import { createQuery } from "@tanstack/solid-query";
-import { A, useParams } from "@solidjs/router";
+import { A, useParams, useSearchParams } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { client } from "~/auth/session";
 import type { Song } from "~/api/types";
@@ -25,12 +25,27 @@ import "./album.css";
 
 export default function AlbumDetail() {
   const params = useParams<{ id: string }>();
+  // /album/:id?track=<songId> (the /song/:id share link lands here): highlight
+  // that row and scroll it into view once the track list renders.
+  const [searchParams] = useSearchParams();
+  const highlightId = createMemo(() => (searchParams.track ? String(searchParams.track) : undefined));
 
   const q = createQuery(() => ({
     queryKey: qk.album(params.id),
     queryFn: () => client()!.getAlbum(params.id),
     enabled: !!client(),
   }));
+
+  createEffect(() => {
+    const id = highlightId();
+    if (!id || songs().length === 0) return;
+    // Wait a frame so the rows exist before scrolling.
+    requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-song-id="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  });
 
   const songs = createMemo(() => q.data?.song ?? []);
   const discs = createMemo(() => {
@@ -147,7 +162,9 @@ export default function AlbumDetail() {
 
               <Show
                 when={multiDisc()}
-                fallback={<SongList songs={songs()} showHeader numbering="track" />}
+                fallback={
+                  <SongList songs={songs()} showHeader numbering="track" highlightId={highlightId()} />
+                }
               >
                 <For each={discs()}>
                   {(group) => (
@@ -155,7 +172,7 @@ export default function AlbumDetail() {
                       <div class="disc-divider">
                         <Icon name="disc" size={14} /> Disc {group.disc}
                       </div>
-                      <SongList songs={group.songs} numbering="track" />
+                      <SongList songs={group.songs} numbering="track" highlightId={highlightId()} />
                     </>
                   )}
                 </For>

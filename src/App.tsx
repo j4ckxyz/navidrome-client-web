@@ -18,6 +18,8 @@ const ArtistDetail = lazy(() => import("~/pages/ArtistDetail"));
 const PlaylistDetail = lazy(() => import("~/pages/PlaylistDetail"));
 const Search = lazy(() => import("~/pages/Search"));
 const Radio = lazy(() => import("~/pages/Radio"));
+const Listen = lazy(() => import("~/pages/Listen"));
+const SongLink = lazy(() => import("~/pages/SongLink"));
 const Settings = lazy(() => import("~/pages/Settings"));
 const Wrapped = lazy(() => import("~/pages/Wrapped"));
 const Stats = lazy(() => import("~/pages/Stats"));
@@ -46,6 +48,8 @@ export function App() {
         <Route path="/playlist/:id" component={PlaylistDetail} />
         <Route path="/search" component={Search} />
         <Route path="/radio" component={Radio} />
+        <Route path="/song/:id" component={SongLink} />
+        <Route path="/listen/:artist/:id/:view?" component={Listen} />
         <Route path="/recap" component={Wrapped} />
         <Route path="/stats" component={Stats} />
         <Route path="/settings" component={Settings} />

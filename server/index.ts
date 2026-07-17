@@ -659,7 +659,7 @@ app.all("/api/*", proxy);
 const CRAWLER_RE =
   /bot|facebookexternalhit|twitterbot|slackbot|discordbot|whatsapp|telegrambot|embed|preview|pinterest|redditbot|applebot|linkedinbot|skypeuripreview|bluesky|bsky|mastodon|iframely|vkshare|quora|google-inspectiontool|developers\.google\.com/i;
 
-const DETAIL_RE = /^\/(album|artist|playlist)\/([^/?#]+)/;
+const DETAIL_RE = /^\/(album|artist|playlist|song)\/([^/?#]+)/;
 
 // Build Subsonic auth params for the configured read-only preview account. A
 // fresh salt/token is derived per call from the stored password.
@@ -733,6 +733,17 @@ async function previewMeta(kind: string, id: string): Promise<PreviewMeta | null
         .join(" · ") || "Playlist",
       coverArt: p.coverArt ?? id,
       ogType: "music.playlist",
+    };
+  }
+  if (kind === "song") {
+    const sub = await ndGet("getSong.view", { id });
+    const s = sub?.song;
+    if (!s) return null;
+    return {
+      title: s.artist ? `${s.title} — ${s.artist}` : s.title,
+      description: [s.album, s.year].filter(Boolean).join(" · ") || "Track",
+      coverArt: s.coverArt ?? id,
+      ogType: "music.song",
     };
   }
   if (kind === "artist") {

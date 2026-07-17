@@ -3,7 +3,7 @@
 // volume live below it, over an ambient blurred-art backdrop. Closes on the
 // collapse chevron or Escape, with a brief slide-out so it doesn't just vanish.
 
-import { A } from "@solidjs/router";
+import { A, useLocation, useNavigate } from "@solidjs/router";
 import { createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { createQuery } from "@tanstack/solid-query";
 import { client } from "~/auth/session";
@@ -13,7 +13,15 @@ import { settings, updateSettings } from "~/settings/store";
 import { isStarred, toggleStar } from "~/features/stars";
 import { extractColors, distinctColours } from "~/lib/colorExtract";
 import { hexToRgb, rgbToOklch, oklch } from "~/theme/colors";
-import { closeFullScreen } from "./fullscreen";
+import {
+  artistSlug,
+  closeFullScreen,
+  fsView,
+  getReturnPath,
+  rememberReturnPath,
+  setFsView,
+} from "./fullscreen";
+import { currentMusicVideo, openMusicVideo } from "./musicVideo";
 import { Visualizer } from "./Visualizer";
 import { CoverArt } from "~/ui/CoverArt";
 import { Icon } from "~/ui/Icon";
@@ -47,6 +55,30 @@ export function FullScreenPlayer() {
   const song = createMemo(() => player.current());
   const [leaving, setLeaving] = createSignal(false);
   let closeBtn: HTMLButtonElement | undefined;
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // URL sync: the full-screen player lives at /listen/:artist/:id, the
+  // visualiser display at /listen/:artist/:id/visualiser — every state is a
+  // shareable address. First entry remembers where to return on close; song
+  // changes and view switches replace the entry rather than piling up history.
+  createEffect(() => {
+    const s = song();
+    if (!s || leaving()) return;
+    const target = `/listen/${artistSlug(s.artist)}/${s.id}${fsView() === "visualiser" ? "/visualiser" : ""}`;
+    if (location.pathname === target) return;
+    const inListen = location.pathname.startsWith("/listen/");
+    if (!inListen) rememberReturnPath(location.pathname + location.search);
+    navigate(target, { replace: inListen });
+  });
+
+  // Browser back/forward navigating away from /listen closes the overlay.
+  let wasInListen = false;
+  createEffect(() => {
+    const inListen = location.pathname.startsWith("/listen/");
+    if (wasInListen && !inListen) closeFullScreen();
+    wasInListen = inListen;
+  });
 
   // Ambient backdrop: a large, blurred copy of the album art.
   const backdrop = createMemo(() => {
@@ -81,17 +113,48 @@ export function FullScreenPlayer() {
       });
   });
 
+  // Full-screen colour mesh built from the album palette: three soft radial
+  // pools of the cover's dominant hues over a dark base. Lightness is clamped
+  // to the theme's background band so the player text always stays readable —
+  // the colours are unmistakably the album's, never mud.
+  const mesh = createMemo(() => {
+    const cols = vizColors();
+    if (!cols.length) return "";
+    const dark = document.documentElement.dataset.base !== "light";
+    const stop = (hex: string, l: number, cMax: number) => {
+      const { c, h } = rgbToOklch(hexToRgb(hex));
+      return oklch(l, Math.min(c, cMax), h);
+    };
+    const a = cols[0];
+    const b = cols[1] ?? cols[0];
+    const c3 = cols[2] ?? cols[0];
+    const L = dark ? [0.42, 0.36, 0.3, 0.16] : [0.9, 0.87, 0.84, 0.97];
+    const cMax = dark ? 0.13 : 0.07;
+    return [
+      `radial-gradient(90% 90% at 18% 22%, ${stop(a, L[0], cMax)} 0%, transparent 65%)`,
+      `radial-gradient(80% 80% at 82% 18%, ${stop(b, L[1], cMax)} 0%, transparent 62%)`,
+      `radial-gradient(95% 95% at 60% 88%, ${stop(c3, L[2], cMax)} 0%, transparent 68%)`,
+      `linear-gradient(${stop(a, L[3], 0.05)}, ${stop(b, L[3], 0.05)})`,
+    ].join(", ");
+  });
+
   const volIcon = createMemo(() => {
     if (player.state.muted || player.state.volume === 0) return "volume-mute";
     if (player.state.volume < 0.5) return "volume-low";
     return "volume";
   });
 
-  // Play the exit animation, then actually unmount.
+  // Play the exit animation, then actually unmount and restore the route we
+  // came from (replacing /listen so Back doesn't reopen the player).
   function close() {
     if (leaving()) return;
     setLeaving(true);
-    window.setTimeout(closeFullScreen, 240);
+    window.setTimeout(() => {
+      closeFullScreen();
+      if (location.pathname.startsWith("/listen/")) {
+        navigate(getReturnPath(), { replace: true });
+      }
+    }, 240);
   }
 
   function onKey(e: KeyboardEvent) {
@@ -146,6 +209,8 @@ export function FullScreenPlayer() {
       classList={{
         "fs-leaving": leaving(),
         "fs-static": !settings.layout.fullScreenVisualizer,
+        "fs-has-mesh": !!mesh(),
+        "fs-viz-mode": fsView() === "visualiser",
       }}
       role="dialog"
       aria-modal="true"
@@ -153,6 +218,10 @@ export function FullScreenPlayer() {
     >
       <Show when={settings.layout.fullScreenBackdrop}>
         <div class="fs-backdrop" style={{ "background-image": backdrop() }} aria-hidden="true" />
+      </Show>
+      {/* Re-key on the palette so each track's colours fade in fresh. */}
+      <Show when={mesh()} keyed>
+        {(m) => <div class="fs-mesh" style={{ "background-image": m }} aria-hidden="true" />}
       </Show>
       <div class="fs-scrim" aria-hidden="true" />
       <Show when={settings.layout.fullScreenBackdrop && gradient()}>
@@ -182,6 +251,16 @@ export function FullScreenPlayer() {
             heading="Display"
             items={[
               {
+                label: "Visualiser focus",
+                icon: "sparkles",
+                checked: fsView() === "visualiser",
+                onChange: (v) => {
+                  setFsView(v ? "visualiser" : "player");
+                  // The focus view is about the waves — make sure they're on.
+                  if (v) updateSettings((s) => (s.layout.fullScreenVisualizer = true));
+                },
+              },
+              {
                 label: "Waveform",
                 icon: "waves",
                 checked: settings.layout.fullScreenVisualizer,
@@ -202,7 +281,7 @@ export function FullScreenPlayer() {
           fallback={<div class="fs-empty muted">Nothing playing</div>}
         >
           <div class="fs-art">
-            <CoverArt coverArt={song()!.coverArt} alt={song()!.album ?? ""} class="fs-cover" />
+            <CoverArt coverArt={song()!.coverArt} src={song()!.artworkUrl} alt={song()!.album ?? ""} class="fs-cover" />
           </div>
 
           <div class="fs-info">
@@ -289,6 +368,12 @@ export function FullScreenPlayer() {
               <Icon name={player.state.repeat === "one" ? "repeat-one" : "repeat"} size={20} />
             </button>
           </div>
+
+          <Show when={currentMusicVideo()}>
+            <button class="btn fs-video-btn" onClick={() => openMusicVideo()}>
+              <Icon name="video" size={17} /> Watch music video
+            </button>
+          </Show>
 
           <div class="fs-volume">
             <button class="icon-btn" onClick={() => player.toggleMute()} aria-label="Mute">

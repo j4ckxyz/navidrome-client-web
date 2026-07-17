@@ -28,6 +28,8 @@ export interface TrackRowProps {
   showAlbum?: boolean;
   // When part of an editable playlist, enables "Remove from playlist".
   onRemoveFromPlaylist?: () => void;
+  // Deep-linked track: draws attention with a brief highlight.
+  highlighted?: boolean;
 }
 
 export function TrackRow(props: TrackRowProps) {
@@ -77,7 +79,7 @@ export function TrackRow(props: TrackRowProps) {
         icon: "share",
         onSelect: () =>
           shareLink(
-            props.song.albumId ? `/album/${props.song.albumId}` : `/search?q=${encodeURIComponent(props.song.title)}`,
+            `/song/${props.song.id}`,
             props.song.artist ? `${props.song.title} — ${props.song.artist}` : props.song.title,
           ),
         separatorBefore: true,
@@ -119,7 +121,8 @@ export function TrackRow(props: TrackRowProps) {
     <RowContextMenu items={actions()}>
       <div
         class="track-row"
-        classList={{ "track-row-current": isCurrent() }}
+        classList={{ "track-row-current": isCurrent(), "track-row-highlight": props.highlighted }}
+        data-song-id={props.song.id}
         onDblClick={play}
       >
         <div class="track-index">

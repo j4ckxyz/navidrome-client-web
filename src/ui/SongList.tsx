@@ -14,6 +14,8 @@ export function SongList(props: {
   // Numbering: "track" uses each song's track number, "index" uses position.
   numbering?: "track" | "index" | "none";
   onRemoveFromPlaylist?: (index: number) => void;
+  // Song id to visually highlight (deep-linked track from /song/:id).
+  highlightId?: string;
 }) {
   const numberFor = (song: Song, i: number) => {
     if (props.numbering === "none") return undefined;
@@ -51,6 +53,7 @@ export function SongList(props: {
             contextIndex={i()}
             showCover={props.showCover}
             showAlbum={props.showAlbum}
+            highlighted={props.highlightId === song.id}
             onRemoveFromPlaylist={
               props.onRemoveFromPlaylist ? () => props.onRemoveFromPlaylist!(i()) : undefined
             }
