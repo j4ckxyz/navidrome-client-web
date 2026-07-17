@@ -3,7 +3,10 @@
 // controls, a debug panel, and settings export/import/reset all live here.
 
 import { createSignal, Show } from "solid-js";
+import { useSearchParams } from "@solidjs/router";
 import { settings, updateSettings, resetSettings, exportSettings, importSettings } from "~/settings/store";
+import { JellyfinConnect } from "~/features/settings/JellyfinConnect";
+import { canPromptInstall, isInstalled, isIos, promptInstall } from "~/lib/installPwa";
 import { activeUsername } from "~/auth/session";
 import { player } from "~/player/store";
 import { ThemeEditor } from "~/features/settings/ThemeEditor";
@@ -14,16 +17,20 @@ import { DebugPanel } from "~/features/settings/DebugPanel";
 import { Icon } from "~/ui/Icon";
 import "./settings.css";
 
-type Tab = "appearance" | "layout" | "playback" | "advanced";
+type Tab = "appearance" | "layout" | "playback" | "connections" | "advanced";
 const TABS: { id: Tab; label: string; icon: Parameters<typeof Icon>[0]["name"] }[] = [
   { id: "appearance", label: "Appearance", icon: "settings" },
   { id: "layout", label: "Layout", icon: "list" },
   { id: "playback", label: "Playback", icon: "play" },
+  { id: "connections", label: "Connections", icon: "link" },
   { id: "advanced", label: "Advanced", icon: "trending" },
 ];
 
 export default function Settings() {
-  const [tab, setTab] = createSignal<Tab>("appearance");
+  // Honor deep links like /settings?tab=connections (used by the Radio page).
+  const [params] = useSearchParams();
+  const initialTab = TABS.some((t) => t.id === params.tab) ? (params.tab as Tab) : "appearance";
+  const [tab, setTab] = createSignal<Tab>(initialTab);
   const [importMsg, setImportMsg] = createSignal<{ ok: boolean; text: string } | null>(null);
 
   function doExport() {
@@ -243,6 +250,45 @@ export default function Settings() {
             </div>
 
             <EqualizerEditor />
+          </Show>
+
+          {/* Connections */}
+          <Show when={tab() === "connections"}>
+            <JellyfinConnect />
+
+            <div class="settings-block">
+              <h3 class="settings-block-title">Install as an app</h3>
+              <Show
+                when={!isInstalled()}
+                fallback={
+                  <p class="muted settings-hint">
+                    You're running the installed app. Playback controls appear on your lock
+                    screen, and the app works offline for browsing cached artwork.
+                  </p>
+                }
+              >
+                <Show
+                  when={canPromptInstall()}
+                  fallback={
+                    <p class="muted settings-hint">
+                      {isIos()
+                        ? "On iPhone/iPad: open the Share sheet in Safari and choose “Add to Home Screen”."
+                        : "Install from your browser's menu (look for “Install app” or an install icon in the address bar). Requires HTTPS."}
+                    </p>
+                  }
+                >
+                  <p class="muted settings-hint">
+                    Add this app to your home screen or dock: it opens full-screen, shows
+                    playback controls on the lock screen, and launches instantly.
+                  </p>
+                  <div class="settings-actions">
+                    <button class="btn btn-primary" onClick={() => void promptInstall()}>
+                      <Icon name="download" size={16} /> Install app
+                    </button>
+                  </div>
+                </Show>
+              </Show>
+            </div>
           </Show>
 
           {/* Advanced */}

@@ -1,0 +1,52 @@
+/* Music-video overlay: near-black stage, video letterboxed in the middle. */
+
+.mv-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 320; /* above the full-screen player (250) and drawer (300) */
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  animation: mv-in 0.2s var(--ease-out) both;
+}
+@keyframes mv-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.mv-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px;
+  color: #fff;
+}
+.mv-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mv-title {
+  font-weight: 600;
+  font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mv-artist {
+  font-size: 13px;
+}
+.mv-close {
+  color: #fff;
+  flex: none;
+}
+
+.mv-video {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  object-fit: contain;
+  background: #000;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

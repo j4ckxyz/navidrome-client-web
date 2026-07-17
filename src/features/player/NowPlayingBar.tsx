@@ -8,6 +8,7 @@ import { player } from "~/player/store";
 import { settings, updateSettings } from "~/settings/store";
 import { openFullScreen } from "./fullscreen";
 import { openVisualizer } from "~/features/visualizer/state";
+import { currentMusicVideo, openMusicVideo } from "./musicVideo";
 import { isStarred, toggleStar } from "~/features/stars";
 import { CoverArt } from "~/ui/CoverArt";
 import { Icon } from "~/ui/Icon";
@@ -67,11 +68,11 @@ export function NowPlayingBar() {
         <Show when={song()} fallback={<div class="np-placeholder muted">Nothing playing</div>}>
           <button
             class="np-cover-btn"
-            onClick={openFullScreen}
+            onClick={() => openFullScreen()}
             aria-label="Open full screen player"
             title="Open full screen"
           >
-            <CoverArt coverArt={song()!.coverArt} size={56} alt="" />
+            <CoverArt coverArt={song()!.coverArt} src={song()!.artworkUrl} size={56} alt="" />
             <span class="np-cover-expand">
               <Icon name="chevron-right" size={18} />
             </span>
@@ -145,6 +146,16 @@ export function NowPlayingBar() {
       </div>
 
       <div class="np-right">
+        <Show when={currentMusicVideo()}>
+          <button
+            class="icon-btn np-video"
+            onClick={() => openMusicVideo()}
+            aria-label="Watch music video"
+            title="Watch music video"
+          >
+            <Icon name="video" size={18} />
+          </button>
+        </Show>
         <button
           class="icon-btn"
           onClick={() => openVisualizer()}

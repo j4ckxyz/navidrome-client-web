@@ -8,6 +8,7 @@ import "./coverart.css";
 
 export function CoverArt(props: {
   coverArt?: string;
+  src?: string; // absolute URL for external sources (e.g. Jellyfin channel art)
   size?: number;
   // Requested source resolution in px, decoupled from the display box. Grids
   // render a responsive (unsized) box but shouldn't fetch a full 600px cover for
@@ -18,6 +19,7 @@ export function CoverArt(props: {
   class?: string;
 }) {
   const url = createMemo(() => {
+    if (props.src) return props.src;
     const c = client();
     if (!c || !props.coverArt) return "";
     return c.coverArtUrl(props.coverArt, props.reqSize ?? (props.size ? props.size * 2 : 600));

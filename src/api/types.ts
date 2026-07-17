@@ -66,6 +66,13 @@ export interface Song {
     trackPeak?: number;
     albumPeak?: number;
   };
+  // Client-side extension for non-Navidrome sources (Jellyfin live radio).
+  // When set, the player streams this URL directly instead of building a
+  // Navidrome stream URL, and skips scrobbling/stars for the track.
+  streamUrl?: string;
+  isRadio?: boolean;
+  // Absolute artwork URL for external sources (Navidrome tracks use coverArt).
+  artworkUrl?: string;
 }
 
 export interface Genre {

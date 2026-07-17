@@ -14,6 +14,8 @@ import { FullScreenPlayer } from "~/features/player/FullScreenPlayer";
 import { isFullScreen } from "~/features/player/fullscreen";
 import { VisualizerStage } from "~/features/visualizer/VisualizerStage";
 import { isVisualizerOpen } from "~/features/visualizer/state";
+import { MusicVideoOverlay } from "~/features/player/MusicVideoOverlay";
+import { videoOpen } from "~/features/player/musicVideo";
 import { QueuePanel } from "~/features/player/QueuePanel";
 import { LyricsPanel } from "~/features/player/LyricsPanel";
 import { AddToPlaylistDialog } from "~/features/playlists/addToPlaylist";
@@ -116,6 +118,9 @@ export function AppShell(props: { children?: JSX.Element }) {
       </Show>
       <Show when={isVisualizerOpen()}>
         <VisualizerStage />
+      </Show>
+      <Show when={videoOpen()}>
+        <MusicVideoOverlay />
       </Show>
       <AddToPlaylistDialog />
       <DownloadDialog />

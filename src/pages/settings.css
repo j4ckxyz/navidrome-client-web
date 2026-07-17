@@ -161,3 +161,43 @@
 .settings-import-err {
   color: var(--danger);
 }
+
+/* Jellyfin connection card (Settings → Connections). */
+.jf-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 380px;
+}
+.jf-form .btn {
+  align-self: flex-start;
+}
+.jf-error {
+  color: #e5484d;
+  font-size: 13px;
+}
+.jf-connected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.jf-connected-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.jf-connected-info > div {
+  display: flex;
+  flex-direction: column;
+}
+.jf-check {
+  color: var(--accent);
+}
+.jf-connected-user {
+  font-weight: 600;
+}
+.jf-connected-server {
+  font-size: 13px;
+}

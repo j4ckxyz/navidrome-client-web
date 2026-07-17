@@ -173,6 +173,11 @@ function createPlayer() {
   }
 
   function deckTrack(song: Song): DeckTrack {
+    // External sources (Jellyfin radio) carry their own stream URL; no
+    // transcoding or ReplayGain applies.
+    if (song.streamUrl) {
+      return { url: song.streamUrl, replayGainDb: 0, peak: 1 };
+    }
     const c = client();
     const maxBitRate = settings.playback.maxBitRate || undefined;
     const format = isFormatSupported(song) ? undefined : "mp3";
@@ -376,7 +381,7 @@ function createPlayer() {
   async function autoplayContinue(): Promise<void> {
     const seed = current();
     const c = client();
-    if (!seed || !c) {
+    if (!seed || !c || seed.isRadio) {
       stop();
       return;
     }
@@ -404,7 +409,7 @@ function createPlayer() {
     const remaining = state.queue.length - 1 - state.index;
     if (remaining > RADIO_THRESHOLD) return;
     const seed = state.queue[state.queue.length - 1];
-    if (!seed) return;
+    if (!seed || seed.isRadio) return;
     await fetchRadioTracks(seed.id, 15);
   }
 
@@ -524,6 +529,7 @@ function createPlayer() {
   // --- Scrobbling ---
 
   function notifyNowPlaying(song: Song): void {
+    if (song.isRadio) return; // not a library track — nothing to scrobble
     if (!settings.playback.scrobble) return;
     client()?.scrobble(song.id, false).catch(() => {});
   }
@@ -535,7 +541,7 @@ function createPlayer() {
     const threshold = Math.min(duration / 2, 240);
     if (time >= threshold) {
       const song = current();
-      if (song) {
+      if (song && !song.isRadio) {
         setScrobbled(true);
         client()?.scrobble(song.id, true).catch(() => {});
       }
