@@ -10,6 +10,7 @@ import { ServerInfo } from "~/features/settings/ServerInfo";
 import { UpdateCheck } from "~/features/settings/UpdateCheck";
 import { DesktopDownloads } from "~/features/settings/DesktopDownloads";
 import { canPromptInstall, isInstalled, isIos, promptInstall } from "~/lib/installPwa";
+import { isTauriDesktop } from "~/lib/runtime";
 import { activeUsername, isAdmin } from "~/auth/session";
 import { player } from "~/player/store";
 import { ThemeEditor } from "~/features/settings/ThemeEditor";
@@ -258,47 +259,53 @@ export default function Settings() {
           {/* Connections */}
           <Show when={tab() === "connections"}>
             <ServerInfo />
-            <DesktopDownloads />
-            {/* Updating the deployment is an operator concern — only admins can
-                act on it, so only admins are shown it. */}
-            <Show when={isAdmin()}>
-              <UpdateCheck />
+            {/* Download, PWA installation, and deployment-update controls are
+                browser concerns. A Tauri build is already the native app. */}
+            <Show when={!isTauriDesktop}>
+              <DesktopDownloads />
+              {/* Updating the deployment is an operator concern — only admins
+                  can act on it, so only admins are shown it. */}
+              <Show when={isAdmin()}>
+                <UpdateCheck />
+              </Show>
             </Show>
             <JellyfinConnect />
 
-            <div class="settings-block">
-              <h3 class="settings-block-title">Install as an app</h3>
-              <Show
-                when={!isInstalled()}
-                fallback={
-                  <p class="muted settings-hint">
-                    You're running the installed app. Playback controls appear on your lock
-                    screen, and the app works offline for browsing cached artwork.
-                  </p>
-                }
-              >
+            <Show when={!isTauriDesktop}>
+              <div class="settings-block">
+                <h3 class="settings-block-title">Install as an app</h3>
                 <Show
-                  when={canPromptInstall()}
+                  when={!isInstalled()}
                   fallback={
                     <p class="muted settings-hint">
-                      {isIos()
-                        ? "On iPhone/iPad: open the Share sheet in Safari and choose “Add to Home Screen”."
-                        : "Install from your browser's menu (look for “Install app” or an install icon in the address bar). Requires HTTPS."}
+                      You're running the installed app. Playback controls appear on your lock
+                      screen, and the app works offline for browsing cached artwork.
                     </p>
                   }
                 >
-                  <p class="muted settings-hint">
-                    Add this app to your home screen or dock: it opens full-screen, shows
-                    playback controls on the lock screen, and launches instantly.
-                  </p>
-                  <div class="settings-actions">
-                    <button class="btn btn-primary" onClick={() => void promptInstall()}>
-                      <Icon name="download" size={16} /> Install app
-                    </button>
-                  </div>
+                  <Show
+                    when={canPromptInstall()}
+                    fallback={
+                      <p class="muted settings-hint">
+                        {isIos()
+                          ? "On iPhone/iPad: open the Share sheet in Safari and choose “Add to Home Screen”."
+                          : "Install from your browser's menu (look for “Install app” or an install icon in the address bar). Requires HTTPS."}
+                      </p>
+                    }
+                  >
+                    <p class="muted settings-hint">
+                      Add this app to your home screen or dock: it opens full-screen, shows
+                      playback controls on the lock screen, and launches instantly.
+                    </p>
+                    <div class="settings-actions">
+                      <button class="btn btn-primary" onClick={() => void promptInstall()}>
+                        <Icon name="download" size={16} /> Install app
+                      </button>
+                    </div>
+                  </Show>
                 </Show>
-              </Show>
-            </div>
+              </div>
+            </Show>
           </Show>
 
           {/* Advanced */}

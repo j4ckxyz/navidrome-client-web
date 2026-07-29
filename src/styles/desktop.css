@@ -1,0 +1,486 @@
+/*
+ * Native-shell refinements. Every rule is scoped to a Tauri platform class so
+ * the browser/PWA presentation remains exactly the same.
+ *
+ * The app keeps its user-selectable palette; these rules adapt system-facing
+ * qualities instead: type, geometry, density, focus, materials, and motion.
+ */
+
+.tauri-desktop {
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tauri-desktop input,
+.tauri-desktop textarea,
+.tauri-desktop [contenteditable="true"],
+.tauri-desktop .bio,
+.tauri-desktop .lyrics-text {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.tauri-desktop img,
+.tauri-desktop a {
+  -webkit-user-drag: none;
+}
+
+.tauri-desktop .route-view {
+  animation-duration: 0.14s;
+}
+
+/* -------------------------------------------------------------------------
+   macOS — SF system type, compact controls, unified translucent chrome, and
+   selection shapes that match a sidebar-based Mac app.
+   ------------------------------------------------------------------------- */
+
+.tauri-macos {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+    sans-serif;
+  --font-mono: "SFMono-Regular", ui-monospace, Menlo, Monaco, monospace;
+  --radius-sm: 5px;
+  --radius: 7px;
+  --radius-lg: 11px;
+  --sidebar-width: 232px;
+  --nowplaying-height: 74px;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.tauri-macos body {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.tauri-macos.tauri-overlay-titlebar #root {
+  padding-top: 38px;
+}
+
+.tauri-macos .native-titlebar {
+  height: 38px;
+  background: color-mix(in srgb, var(--sidebar-bg) 76%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--border) 48%, transparent);
+  backdrop-filter: blur(28px) saturate(165%);
+  -webkit-backdrop-filter: blur(28px) saturate(165%);
+}
+
+.tauri-macos .sidebar-inner {
+  padding: 12px 10px 10px;
+  background: color-mix(in srgb, var(--sidebar-bg) 82%, transparent);
+  backdrop-filter: blur(24px) saturate(145%);
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
+}
+
+.tauri-macos .sidebar-brand {
+  gap: 10px;
+  padding: 4px 8px 14px;
+}
+
+.tauri-macos .sidebar-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.tauri-macos .sidebar-brand-name {
+  font-size: 15px;
+  font-weight: var(--fw-semibold);
+}
+
+.tauri-macos .sidebar-link {
+  min-height: 30px;
+  gap: 10px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+}
+
+.tauri-macos .sidebar-link-active {
+  background: color-mix(in srgb, var(--accent) 68%, transparent);
+  color: var(--on-accent);
+}
+
+.tauri-macos .sidebar-section-head {
+  padding-inline: 9px;
+  font-size: 11px;
+  letter-spacing: 0.025em;
+  text-transform: none;
+}
+
+.tauri-macos .topbar {
+  min-height: 50px;
+  padding: 9px 24px;
+  background: color-mix(in srgb, var(--content-bg) 84%, transparent);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  border-bottom-color: color-mix(in srgb, var(--border) 58%, transparent);
+}
+
+.tauri-macos .topbar-search {
+  max-width: 360px;
+}
+
+.tauri-macos .topbar-search-input {
+  height: 30px;
+  padding: 5px 10px 5px 34px;
+  border-radius: 7px;
+  border-color: color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
+}
+
+.tauri-macos .topbar-search-icon {
+  left: 10px;
+}
+
+.tauri-macos .btn {
+  min-height: 30px;
+  padding: 4px 12px;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: 7px;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--surface-hover) 78%, transparent),
+    color-mix(in srgb, var(--surface) 92%, transparent)
+  );
+  box-shadow: 0 1px 1px rgb(0 0 0 / 16%),
+    inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
+  transition-duration: 0.1s;
+}
+
+.tauri-macos .btn:hover {
+  background: var(--surface-hover);
+}
+
+.tauri-macos .btn:active {
+  transform: none;
+  background: var(--surface-active);
+}
+
+.tauri-macos .btn-primary {
+  border-color: color-mix(in srgb, var(--accent) 82%, black);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 1px 1px rgb(0 0 0 / 18%),
+    inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+}
+
+.tauri-macos .icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  transition-duration: 0.1s;
+}
+
+.tauri-macos .icon-btn:hover,
+.tauri-macos .icon-btn:active {
+  transform: none;
+}
+
+.tauri-macos .input,
+.tauri-macos select {
+  min-height: 30px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--content-bg) 90%, transparent);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 12%);
+}
+
+.tauri-macos :focus-visible {
+  outline-width: 3px;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
+.tauri-macos .page {
+  padding: 20px 28px 32px;
+}
+
+.tauri-macos .page-title {
+  font-size: 26px;
+  font-weight: var(--fw-bold);
+  letter-spacing: -0.018em;
+}
+
+.tauri-macos .settings-layout {
+  grid-template-columns: 168px minmax(0, 1fr);
+  gap: 28px;
+  margin-top: 20px;
+}
+
+.tauri-macos .settings-tab {
+  min-height: 30px;
+  padding: 5px 9px;
+  gap: 9px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.tauri-macos .settings-tab-active {
+  background: color-mix(in srgb, var(--accent) 68%, transparent);
+  color: var(--on-accent);
+}
+
+.tauri-macos .settings-block {
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  border-color: color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  box-shadow: 0 1px 1px rgb(0 0 0 / 8%);
+}
+
+.tauri-macos .settings-block-title {
+  font-size: 13px;
+  font-weight: var(--fw-semibold);
+}
+
+.tauri-macos .settings-row {
+  padding: 10px 0;
+}
+
+.tauri-macos .settings-row-label {
+  font-size: 13px;
+}
+
+.tauri-macos .toggle {
+  width: 38px;
+  height: 22px;
+  padding: 2px;
+}
+
+.tauri-macos .toggle-knob {
+  width: 18px;
+  height: 18px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 28%);
+}
+
+.tauri-macos .toggle-on .toggle-knob {
+  transform: translateX(16px);
+}
+
+/* -------------------------------------------------------------------------
+   Windows — Segoe UI Variable, Fluent 4/8px geometry, layered surfaces,
+   compact command controls, and a visible navigation selection rail.
+   ------------------------------------------------------------------------- */
+
+.tauri-windows {
+  --font: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  --radius-sm: 4px;
+  --radius: 4px;
+  --radius-lg: 8px;
+  --sidebar-width: 240px;
+  --ease-out: cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+.tauri-windows body {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.tauri-windows .sidebar-inner {
+  padding: 14px 10px 10px;
+  border-right: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--sidebar-bg) 94%, var(--content-bg));
+}
+
+.tauri-windows .sidebar-brand {
+  padding: 4px 10px 16px;
+}
+
+.tauri-windows .sidebar-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+}
+
+.tauri-windows .sidebar-brand-name {
+  font-size: 16px;
+  font-weight: var(--fw-semibold);
+}
+
+.tauri-windows .sidebar-link {
+  position: relative;
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: var(--fw-regular);
+}
+
+.tauri-windows .sidebar-link-active {
+  color: var(--sidebar-text);
+  background: color-mix(in srgb, var(--surface-active) 74%, transparent);
+}
+
+.tauri-windows .sidebar-link-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: translateY(-50%);
+}
+
+.tauri-windows .sidebar-section-head {
+  padding-inline: 10px;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.tauri-windows .topbar {
+  min-height: 56px;
+  padding: 10px 28px;
+  background: color-mix(in srgb, var(--content-bg) 92%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.tauri-windows .topbar-search-input {
+  height: 34px;
+  padding-block: 6px;
+  border-radius: 4px;
+  border-color: color-mix(in srgb, var(--border) 84%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--text-muted) 58%, var(--border));
+  background: color-mix(in srgb, var(--surface) 90%, var(--content-bg));
+}
+
+.tauri-windows .btn {
+  min-height: 32px;
+  padding: 5px 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--text-muted) 42%, var(--border));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface) 92%, var(--content-bg));
+  box-shadow: 0 1px 1px rgb(0 0 0 / 8%);
+  transition-duration: 0.1s;
+}
+
+.tauri-windows .btn:hover {
+  background: var(--surface-hover);
+}
+
+.tauri-windows .btn:active {
+  transform: none;
+  background: var(--surface-active);
+  box-shadow: none;
+}
+
+.tauri-windows .btn-primary {
+  border-color: color-mix(in srgb, var(--accent) 78%, black);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.tauri-windows .icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  transition-duration: 0.1s;
+}
+
+.tauri-windows .icon-btn:hover,
+.tauri-windows .icon-btn:active {
+  transform: none;
+}
+
+.tauri-windows .input,
+.tauri-windows select {
+  min-height: 32px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  border-bottom-color: color-mix(in srgb, var(--text-muted) 55%, var(--border));
+  background: color-mix(in srgb, var(--content-bg) 88%, var(--surface));
+}
+
+.tauri-windows :focus-visible {
+  outline-width: 2px;
+  outline-offset: 2px;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.tauri-windows .page {
+  padding: 24px 32px 38px;
+}
+
+.tauri-windows .page-title {
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0;
+}
+
+.tauri-windows .settings-layout {
+  grid-template-columns: 188px minmax(0, 1fr);
+  gap: 28px;
+  margin-top: 20px;
+}
+
+.tauri-windows .settings-tab {
+  position: relative;
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: var(--fw-regular);
+}
+
+.tauri-windows .settings-tab-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: translateY(-50%);
+}
+
+.tauri-windows .settings-block {
+  padding: 20px;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 92%, var(--content-bg));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+
+.tauri-windows .settings-block-title {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: var(--fw-semibold);
+}
+
+.tauri-windows .settings-row {
+  padding: 11px 0;
+}
+
+.tauri-windows .toggle {
+  width: 40px;
+  height: 20px;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 64%, transparent);
+}
+
+.tauri-windows .toggle-knob {
+  width: 12px;
+  height: 12px;
+}
+
+.tauri-windows .toggle-on .toggle-knob {
+  transform: translateX(20px);
+}
+
+.tauri-windows .np-bar {
+  background: color-mix(in srgb, var(--now-playing-bg) 94%, var(--surface));
+}
+
+.tauri-windows .sidebar-edge-chevron {
+  border-radius: 4px;
+}

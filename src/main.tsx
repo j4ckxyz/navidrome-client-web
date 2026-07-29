@@ -8,12 +8,14 @@ import { player } from "~/player/store";
 import { installMediaSession } from "~/player/mediaSession";
 import { installJellyfinRemote } from "~/player/jellyfinRemote";
 import { installListeners as installPwaListeners } from "~/lib/installPwa";
+import { desktopClasses, desktopPlatform, isTauriDesktop } from "~/lib/runtime";
 import { loadServerConfig } from "~/lib/serverConfig";
 import { APP_NAME, APP_TAGLINE } from "~/lib/branding";
 import { App } from "./App";
 
 import "~/styles/global.css";
 import "~/pages/pages.css";
+import "~/styles/desktop.css";
 
 // Tauri provides the native window controls and compositor blur; this marker
 // reserves a draggable title-bar region without changing the browser/PWA UI.
@@ -21,11 +23,8 @@ import "~/pages/pages.css";
 // only macOS gets the reserved strip — on Windows and Linux the real title bar
 // sits above the client area and the strip would be a second, dead one covering
 // the top of the UI.
-if ("__TAURI_INTERNALS__" in window) {
-  document.documentElement.classList.add("tauri-desktop");
-  if (/mac/i.test(navigator.userAgent)) {
-    document.documentElement.classList.add("tauri-overlay-titlebar");
-  }
+if (desktopPlatform) {
+  document.documentElement.classList.add(...desktopClasses(desktopPlatform));
 }
 
 // Restore a prior session and queue before first paint.
@@ -36,18 +35,26 @@ installMediaSession();
 // Register as a controllable Jellyfin device ("Play On", remote control) when
 // the active backend is Jellyfin. No-op for Navidrome.
 installJellyfinRemote();
-// Catch beforeinstallprompt before the browser drops it.
-installPwaListeners();
+// Native shells neither need nor understand browser installation prompts.
+if (!isTauriDesktop) installPwaListeners();
 // Check if running with a backend proxy (non-blocking; sets proxyMode signal).
 void loadServerConfig();
 
 // Install the service worker (production builds only — it would fight Vite's
 // dev server). Registration failures are non-fatal; the app just isn't
 // installable/offline-capable in that session.
-if (import.meta.env.PROD && "serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
-  });
+if ("serviceWorker" in navigator) {
+  if (isTauriDesktop) {
+    // Remove registrations left by older desktop builds. Native assets ship
+    // with the binary, so a web cache can only make an upgraded app stale.
+    void navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) void registration.unregister();
+    });
+  } else if (import.meta.env.PROD) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    });
+  }
 }
 
 const root = document.getElementById("root");
