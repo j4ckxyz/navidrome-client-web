@@ -48,7 +48,7 @@ Uploads are intentionally impossible here (the host has no access to users' musi
    You do **not** need the music volume; remove or ignore it.
 
    ```bash
-   docker compose up -d
+   bun run compose:up
    ```
 
    Or by hand:
@@ -109,7 +109,7 @@ one music folder.
 1. Point it at your library and start it:
 
    ```bash
-   MUSIC_HOST_DIR=/path/to/your/music docker compose -f docker-compose.full.yml up -d
+   COMMIT_HASH=$(git rev-parse HEAD) MUSIC_HOST_DIR=/path/to/your/music docker compose -f docker-compose.full.yml up -d
    ```
 
 2. Open `http://localhost:8680`. On first login, create your admin account.
@@ -128,7 +128,7 @@ all three variables set (the `MUSIC_DIR` env is what actually switches uploads o
 NAVIDROME_URL=http://host.docker.internal:4533 \
 MUSIC_DIR=/music \
 MUSIC_HOST_DIR=/path/to/your/music \
-docker compose up -d
+bun run compose:up
 ```
 
 > `host.docker.internal` resolves to the host from inside the container on Docker
@@ -165,7 +165,7 @@ just a separate container) and avoid CORS, but you don't need uploads.
 Use proxy mode and simply **don't mount a music volume**:
 
 ```bash
-NAVIDROME_URL=https://navidrome.example.com docker compose up -d
+NAVIDROME_URL=https://navidrome.example.com bun run compose:up
 ```
 
 By hand:

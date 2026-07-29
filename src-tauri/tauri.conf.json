@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Tonearm",
+  "version": "0.1.0",
+  "identifier": "app.tonearm.desktop",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{
+      "title": "Tonearm",
+      "width": 1280,
+      "height": 800,
+      "minWidth": 840,
+      "minHeight": 600,
+      "decorations": true,
+      "titleBarStyle": "Overlay",
+      "hiddenTitle": true,
+      "transparent": true
+    }],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Music",
+    "shortDescription": "Fast Navidrome and Jellyfin music player",
+    "macOS": { "minimumSystemVersion": "15.0" },
+    "linux": { "appimage": { "bundleMediaFramework": false } },
+    "windows": { "nsis": { "installMode": "currentUser" } },
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico", "icons/icon.icns"]
+  }
+}

@@ -15,7 +15,9 @@ services:
     build:
       context: .
       args:
-        - COMMIT_HASH
+        # Set automatically by `bun run compose:up`; when invoking Compose
+        # directly use COMMIT_HASH=$(git rev-parse HEAD) docker compose up.
+        COMMIT_HASH: ${COMMIT_HASH:-}
     image: tonearm:latest
     container_name: tonearm
     ports:

@@ -26,35 +26,38 @@ const Stats = lazy(() => import("~/pages/Stats"));
 
 export function App() {
   return (
-    <Show
-      when={client() && !reauthRequired()}
-      fallback={
-        <LoginScreen
-          reauth={reauthRequired()}
-          prefillServer={reauthRequired() ? activeServerUrl() ?? undefined : undefined}
-          prefillUser={reauthRequired() ? activeUsername() ?? undefined : undefined}
-        />
-      }
-    >
-      <Router root={AppShell}>
-        <Route path="/" component={Home} />
-        <Route path="/albums" component={Albums} />
-        <Route path="/artists" component={Artists} />
-        <Route path="/genres" component={Genres} />
-        <Route path="/genre/:name" component={GenreDetail} />
-        <Route path="/favourites" component={Favourites} />
-        <Route path="/album/:id" component={AlbumDetail} />
-        <Route path="/artist/:id" component={ArtistDetail} />
-        <Route path="/playlist/:id" component={PlaylistDetail} />
-        <Route path="/search" component={Search} />
-        <Route path="/radio" component={Radio} />
-        <Route path="/song/:id" component={SongLink} />
-        <Route path="/listen/:artist/:id/:view?" component={Listen} />
-        <Route path="/recap" component={Wrapped} />
-        <Route path="/stats" component={Stats} />
-        <Route path="/settings" component={Settings} />
-        <Route path="*" component={Home} />
-      </Router>
-    </Show>
+    <>
+      <div class="native-titlebar" data-tauri-drag-region aria-hidden="true" />
+      <Show
+        when={client() && !reauthRequired()}
+        fallback={
+          <LoginScreen
+            reauth={reauthRequired()}
+            prefillServer={reauthRequired() ? activeServerUrl() ?? undefined : undefined}
+            prefillUser={reauthRequired() ? activeUsername() ?? undefined : undefined}
+          />
+        }
+      >
+        <Router root={AppShell}>
+          <Route path="/" component={Home} />
+          <Route path="/albums" component={Albums} />
+          <Route path="/artists" component={Artists} />
+          <Route path="/genres" component={Genres} />
+          <Route path="/genre/:name" component={GenreDetail} />
+          <Route path="/favourites" component={Favourites} />
+          <Route path="/album/:id" component={AlbumDetail} />
+          <Route path="/artist/:id" component={ArtistDetail} />
+          <Route path="/playlist/:id" component={PlaylistDetail} />
+          <Route path="/search" component={Search} />
+          <Route path="/radio" component={Radio} />
+          <Route path="/song/:id" component={SongLink} />
+          <Route path="/listen/:artist/:id/:view?" component={Listen} />
+          <Route path="/recap" component={Wrapped} />
+          <Route path="/stats" component={Stats} />
+          <Route path="/settings" component={Settings} />
+          <Route path="*" component={Home} />
+        </Router>
+      </Show>
+    </>
   );
 }
