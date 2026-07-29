@@ -809,6 +809,18 @@ function createPlayer() {
   // keepalive so it survives teardown.
   if (typeof window !== "undefined") {
     window.addEventListener("pagehide", () => reportStop(engine.getCurrentTime()));
+    // Tauri's native application menu emits these actions. Keeping the mapping
+    // beside the player means the desktop shell never needs access to library
+    // credentials or playback internals.
+    window.addEventListener("tonearm:native-shortcut", ((event: CustomEvent<string>) => {
+      switch (event.detail) {
+        case "play-pause": togglePlay(); break;
+        case "previous": previous(); break;
+        case "next": next(); break;
+        case "volume-up": changeVolume(0.05); break;
+        case "volume-down": changeVolume(-0.05); break;
+      }
+    }) as EventListener);
   }
 
   return {

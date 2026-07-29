@@ -1,0 +1,83 @@
+name: Desktop release
+
+on:
+  push:
+    tags: ["v*"]
+  # Also build when a release is created outside this workflow (for example
+  # through GitHub's Releases UI or another release automation).
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing or new release tag to build
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+# A tag push and a release publication can happen close together. Serialising
+# by tag prevents both events from uploading the same platform asset at once.
+concurrency:
+  group: desktop-release-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            args: --target universal-apple-darwin
+          - os: windows-latest
+            args: --bundles msi
+          - os: ubuntu-22.04
+            args: --bundles appimage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag || github.ref }}
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: "1.3.0" }
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - name: Linux WebKit dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: bun install --frozen-lockfile
+      - name: Generate native icons from the web app icon
+        run: bun run desktop:icons
+      - name: Install Windows code-signing certificate
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE_BASE64) {
+            throw "WINDOWS_CERTIFICATE_BASE64 is required. Public Windows installers must be Authenticode signed."
+          }
+          $bytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64)
+          $path = Join-Path $env:RUNNER_TEMP "tonearm-signing.pfx"
+          [IO.File]::WriteAllBytes($path, $bytes)
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $certificate = Import-PfxCertificate -FilePath $path -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          @{ bundle = @{ windows = @{ certificateThumbprint = $certificate.Thumbprint } } } |
+            ConvertTo-Json -Depth 4 | Set-Content src-tauri/tauri.windows.conf.json
+          Remove-Item $path -Force
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+          releaseName: Tonearm ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+          releaseBody: Native desktop builds for macOS 15+, Windows, and Linux. Downloads made inside Tonearm are saved for offline listening.
+          # Releases created from a tag or manual run must be public so the
+          # installers appear in GitHub's Releases tab. For an existing
+          # published release, the action simply attaches the new assets.
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}

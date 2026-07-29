@@ -15,6 +15,11 @@ import { App } from "./App";
 import "~/styles/global.css";
 import "~/pages/pages.css";
 
+// Allow targeted desktop styling without replacing the native title bar.
+if ("__TAURI_INTERNALS__" in window) {
+  document.documentElement.classList.add("tauri-desktop");
+}
+
 // Restore a prior session and queue before first paint.
 initSession();
 player.restoreQueue();
