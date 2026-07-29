@@ -30,11 +30,22 @@ jobs:
         include:
           - os: macos-latest
             args: --target universal-apple-darwin
+          # Ship both Windows formats. Defender and SmartScreen treat an
+          # unsigned self-extracting NSIS .exe more harshly than an .msi that
+          # msiexec executes, so the MSI is the fallback when the setup .exe is
+          # quarantined.
           - os: windows-latest
-            args: --bundles nsis
+            args: --bundles nsis,msi
           - os: ubuntu-22.04
             args: --bundles appimage
     runs-on: ${{ matrix.os }}
+    # Job level so the signing step's own `if` can read AZURE_TENANT_ID: a step
+    # cannot see its own `env` block from its condition. trusted-signing-cli
+    # also picks these up from the environment during the bundle step.
+    env:
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,6 +61,18 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Generate native icons from the web app icon
         run: bun run desktop:icons
+      # Authenticode signing is what actually stops Windows Security deleting
+      # the installer; everything else only reduces the odds. It stays optional
+      # so forks and secret-less runs still produce (unsigned) installers.
+      - name: Enable Windows code signing
+        if: matrix.os == 'windows-latest' && env.AZURE_TENANT_ID != ''
+        env:
+          SIGNING_ENDPOINT: ${{ secrets.WINDOWS_SIGNING_ENDPOINT }}
+          SIGNING_ACCOUNT: ${{ secrets.WINDOWS_SIGNING_ACCOUNT }}
+          SIGNING_PROFILE: ${{ secrets.WINDOWS_SIGNING_PROFILE }}
+        run: |
+          cargo install trusted-signing-cli --version 0.5.0 --locked
+          bun run scripts/enable-windows-signing.ts
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -63,3 +86,17 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+  # tauri-action creates the release as a draft and only un-drafts it from the
+  # job that happened to create it, so a matrix build can finish with every
+  # installer uploaded to a release nobody can download. Publishing here, once,
+  # after all three platforms succeed, makes that deterministic.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest

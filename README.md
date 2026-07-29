@@ -211,16 +211,21 @@ bun run desktop:build
 ```
 
 Tags matching `v*` trigger `.github/workflows/desktop-release.yml`, producing a
-universal (Apple Silicon + Intel) macOS 15+ DMG, a Windows NSIS installer and a
-Linux AppImage on a public GitHub release. Publishing a release through GitHub's
-UI also triggers the same builds and attaches them to that release. The workflow
-can also be run manually with a release tag. Playback commands are exposed as native
-menu accelerators using Command on macOS and Control on Windows/Linux. The same
-track, album and playlist Download actions as the web app save music for offline
-listening. Desktop icons are generated from the existing web icon at build time,
-so native binary assets are not duplicated in the repository. Native builds also
-retain the platform window controls and use macOS Vibrancy or Windows Mica behind
-the draggable title bar; unsupported compositors fall back without extra work.
+universal (Apple Silicon + Intel) macOS 15+ DMG, Windows NSIS and MSI installers
+and a Linux AppImage on a public GitHub release. Publishing a release through
+GitHub's UI also triggers the same builds and attaches them to that release. The
+workflow can also be run manually with a release tag. Playback commands are exposed
+as native menu accelerators using Command on macOS and Control on Windows/Linux.
+The same track, album and playlist Download actions as the web app save music for
+offline listening. Desktop icons are generated from the existing web icon at build
+time, so native binary assets are not duplicated in the repository. Native builds
+also retain the platform window controls and use macOS Vibrancy or Windows 11 Mica
+behind the draggable title bar; unsupported compositors fall back to an opaque
+window without extra work.
+
+See [docs/windows-release.md](docs/windows-release.md) for the Windows specifics:
+why the window effects have to stay best-effort, and how to enable Authenticode
+signing so Windows Security stops quarantining the installer.
 
 ## Out of scope
 

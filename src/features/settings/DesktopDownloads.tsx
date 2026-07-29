@@ -13,7 +13,7 @@ function platform(): "mac" | "windows" | "linux" {
 
 const choices = {
   mac: { label: "Download for macOS", detail: "Universal DMG · Apple Silicon + Intel · macOS 15+" },
-  windows: { label: "Download for Windows", detail: "64-bit native installer" },
+  windows: { label: "Download for Windows", detail: "64-bit installer — use the .msi if Windows Security blocks the setup .exe" },
   linux: { label: "Download for Linux", detail: "64-bit AppImage" },
 } as const;
 
