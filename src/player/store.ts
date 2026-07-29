@@ -6,77 +6,19 @@
 import { batch, createRoot, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import type { Song } from "~/api/types";
+import type { StreamHandle } from "~/api/MusicClient";
 import { client } from "~/auth/session";
 import { settings } from "~/settings/store";
 import { proxyMode } from "~/lib/serverConfig";
+import { canPlayContainer } from "~/lib/codecs";
 import { nextRadioBatch } from "~/lib/recommendations";
 import { AudioEngine, type DeckTrack } from "./engine";
 
-let supportAudio: HTMLAudioElement | null = null;
-function getSupportAudio(): HTMLAudioElement | null {
-  if (typeof window !== "undefined" && !supportAudio) {
-    try {
-      supportAudio = new Audio();
-    } catch {
-      // ignore
-    }
-  }
-  return supportAudio;
-}
-
+// Whether the browser can decode this track as stored. Delegates to the shared
+// codec probe so the player and the Jellyfin device profile can never disagree
+// about what needs transcoding.
 export function isFormatSupported(song: Song): boolean {
-  const suffix = (song.suffix ?? "").toLowerCase();
-  const contentType = (song.contentType ?? "").toLowerCase();
-
-  // Formats known NOT to be supported natively by browsers (Chrome, Firefox, Safari)
-  const unsupportedSuffixes = ["aiff", "aif", "ape", "dsf", "dff", "wma"];
-  if (unsupportedSuffixes.includes(suffix)) {
-    return false;
-  }
-
-  if (
-    contentType.includes("aiff") ||
-    contentType.includes("x-aiff") ||
-    contentType.includes("wma") ||
-    contentType.includes("dsd") ||
-    contentType.includes("ape")
-  ) {
-    return false;
-  }
-
-  const audio = getSupportAudio();
-  if (audio) {
-    if (contentType) {
-      try {
-        const support = audio.canPlayType(contentType);
-        return support === "maybe" || support === "probably";
-      } catch {
-        // fall through
-      }
-    }
-
-    const mimeMap: Record<string, string> = {
-      mp3: "audio/mpeg",
-      m4a: "audio/mp4",
-      aac: "audio/aac",
-      flac: "audio/flac",
-      wav: "audio/wav",
-      ogg: "audio/ogg",
-      opus: "audio/ogg; codecs=opus",
-      webm: "audio/webm",
-    };
-
-    const mime = mimeMap[suffix];
-    if (mime) {
-      try {
-        return audio.canPlayType(mime) !== "";
-      } catch {
-        // fall through
-      }
-    }
-  }
-
-  return true;
+  return canPlayContainer(song.contentType || song.suffix, song.codec);
 }
 
 export type RepeatMode = "off" | "all" | "one";
@@ -117,6 +59,34 @@ function createPlayer() {
   // Throttle position persistence during playback.
   let lastPersist = 0;
 
+  // The negotiated stream backing the currently-playing track. Carries the
+  // Jellyfin PlaySessionId, so progress and stop reports land on the right
+  // server-side playback and its encoder is released when we're done.
+  let activeStream: StreamHandle | null = null;
+  // The song `activeStream` belongs to, so a stop report can still name it after
+  // the queue index has moved on.
+  let activeSong: Song | null = null;
+  // The prefetched next track and its negotiated stream. A crossfade starts the
+  // idle deck without going through playSongAt, so these get promoted to
+  // active/* when that happens — otherwise the crossfaded track would be
+  // reported with the previous track's session id.
+  let pendingSong: Song | null = null;
+  let pendingStream: StreamHandle | null = null;
+  let pendingDeck: DeckTrack | null = null;
+  // Last time a progress report was sent (performance.now()).
+  let lastProgressReport = 0;
+  // Whether the server has been told playback started for `activeSong`. Progress
+  // and pause reports before that would open a session out of order.
+  let startReported = false;
+  // Guards the "the browser couldn't decode this" retry so a genuinely broken
+  // track is skipped instead of looping.
+  let transcodeRetryFor: string | null = null;
+  // Monotonic token so a slow stream negotiation for a track the user has
+  // already skipped past can't hijack playback.
+  let playToken = 0;
+
+  const PROGRESS_REPORT_MS = 10_000;
+
   // Sleep timer: null = off, "end" = stop when the current track finishes, or a
   // number = epoch-ms deadline at which playback pauses.
   const [sleepMode, setSleepMode] = createSignal<null | "end" | number>(null);
@@ -133,17 +103,54 @@ function createPlayer() {
         setState("currentTime", time);
       }
       maybeScrobble(time, duration > 0 ? duration : state.duration);
+      maybeReportProgress(time);
       // Persist position periodically so a refresh resumes where you were.
       if (settings.playback.resumeQueueOnLaunch && performance.now() - lastPersist > 4000) {
         lastPersist = performance.now();
         persistQueue();
       }
     },
-    onEnded: () => advance(true),
-    onPlayingChange: (playing) => setState("isPlaying", playing),
+    onEnded: () => {
+      // Report the stop *before* advancing, while the finished track is still
+      // the active one: on Jellyfin this is what banks the play count and
+      // clears the resume position.
+      reportStop(state.currentTime);
+      advance(true);
+    },
+    onPlayingChange: (playing) => {
+      setState("isPlaying", playing);
+      // Push the pause/unpause straight through rather than waiting for the next
+      // progress tick, so a Jellyfin remote reflects it immediately.
+      reportEvent(playing ? "progress" : "pause", engine.getCurrentTime());
+    },
     onCrossfadeStart: () => {
+      // The outgoing track finished as far as the server is concerned.
+      reportStop(state.currentTime);
       // The next track is now audibly active; advance queue state to match.
       advanceIndexOnly();
+    },
+    onError: (code) => {
+      const song = current();
+      if (!song) return;
+      // MEDIA_ERR_DECODE (3) / SRC_NOT_SUPPORTED (4): the browser can't handle
+      // what the server sent. Ask for a transcode once before giving up — this
+      // covers containers our probe was optimistic about.
+      if ((code === 3 || code === 4) && transcodeRetryFor !== song.id) {
+        transcodeRetryFor = song.id;
+        void playSongAt(state.index, engine.getCurrentTime(), { forceTranscode: true });
+        return;
+      }
+      // Unplayable: don't strand the queue on it.
+      advance(true);
+    },
+    onSeekUnsupported: (time) => {
+      // Live radio has no timeline to seek within; restarting the stream would
+      // just interrupt it.
+      if (current()?.isRadio) return;
+      // A live transcode: reopen the stream at the requested offset instead of
+      // moving currentTime, which would land at an arbitrary point.
+      setState("currentTime", time);
+      void playSongAt(state.index, time, { keepScrobbleState: true });
     },
   });
   engine.setVolume(state.volume);
@@ -172,36 +179,129 @@ function createPlayer() {
     return (base ?? 0) + settings.playback.replayGain.preAmpDb;
   }
 
-  function deckTrack(song: Song): DeckTrack {
-    // External sources (Jellyfin radio) carry their own stream URL; no
+  function peakFor(song: Song): number {
+    return settings.playback.replayGain.mode === "album"
+      ? (song.replayGain?.albumPeak ?? 1)
+      : (song.replayGain?.trackPeak ?? 1);
+  }
+
+  // Ask the backend for a playable stream.
+  //
+  // Subsonic answers instantly from the credentials it already holds; Jellyfin
+  // does a real negotiation round-trip (PlaybackInfo) that decides direct play
+  // vs transcode and mints the PlaySessionId. Either way the caller gets back
+  // both the DeckTrack the engine needs and the handle the reporter needs.
+  async function resolveDeck(
+    song: Song,
+    opts: { startSeconds?: number; forceTranscode?: boolean } = {},
+  ): Promise<{ deck: DeckTrack; stream: StreamHandle | null }> {
+    // External sources (live radio) carry their own stream URL; no negotiation,
     // transcoding or ReplayGain applies.
     if (song.streamUrl) {
-      return { url: song.streamUrl, replayGainDb: 0, peak: 1 };
+      return {
+        deck: { url: song.streamUrl, replayGainDb: 0, peak: 1, canSeek: false },
+        stream: null,
+      };
     }
     const c = client();
-    const maxBitRate = settings.playback.maxBitRate || undefined;
-    const format = isFormatSupported(song) ? undefined : "mp3";
+    if (!c) return { deck: { url: "", replayGainDb: 0, peak: 1 }, stream: null };
+
+    const streamOpts = {
+      maxBitRateKbps: settings.playback.maxBitRate || undefined,
+      startSeconds: opts.startSeconds,
+      // Force a transcode when the browser has already choked on this source,
+      // or when our capability probe says it never had a chance.
+      forceTranscode: opts.forceTranscode || !isFormatSupported(song),
+    };
+
+    let stream: StreamHandle;
+    try {
+      stream = await c.resolveStream(song.id, streamOpts);
+    } catch {
+      // Negotiation failed (offline, server hiccup): fall back to the plain URL
+      // so playback still has a chance rather than failing outright.
+      stream = {
+        url: c.streamUrl(
+          song.id,
+          streamOpts.maxBitRateKbps,
+          streamOpts.forceTranscode ? "mp3" : undefined,
+        ),
+        canSeek: true,
+        startOffset: 0,
+      };
+    }
+
     return {
-      url: c ? c.streamUrl(song.id, maxBitRate, format) : "",
-      replayGainDb: replayGainDb(song),
-      peak:
-        settings.playback.replayGain.mode === "album"
-          ? song.replayGain?.albumPeak ?? 1
-          : song.replayGain?.trackPeak ?? 1,
+      deck: {
+        url: stream.url,
+        replayGainDb: replayGainDb(song),
+        peak: peakFor(song),
+        startOffset: stream.startOffset,
+        canSeek: stream.canSeek,
+        duration: stream.duration ?? song.duration,
+      },
+      stream,
     };
   }
 
-  async function playSongAt(index: number, startAt = 0): Promise<void> {
+  async function playSongAt(
+    index: number,
+    startAt = 0,
+    opts: { forceTranscode?: boolean; keepScrobbleState?: boolean } = {},
+  ): Promise<void> {
     const song = state.queue[index];
     if (!song) return;
+
+    // Close out whatever was playing before, so the server frees its encoder and
+    // records where we got to. This applies even when it's the same track: a
+    // repeat or a seek-restart opens a brand-new server-side stream, and the old
+    // one has to be released rather than left running.
+    if (activeSong) reportStop(engine.getCurrentTime());
+
+    const token = ++playToken;
     // Seed time + length from metadata immediately so the UI is correct for the
     // new track before (and even if) the element reports its own duration.
     setState({ index, currentTime: startAt, duration: song.duration ?? 0 });
-    setScrobbled(false);
-    await engine.play(deckTrack(song));
-    // Resume from a saved position (e.g. after a page refresh). Best-effort:
-    // depends on the element knowing its duration, which direct files do.
-    if (startAt > 0) engine.seek(startAt);
+    if (!opts.keepScrobbleState) setScrobbled(false);
+    if (!opts.forceTranscode) transcodeRetryFor = null;
+
+    // Advancing onto the track we already prefetched: reuse that exact stream.
+    // Re-negotiating would mint a different URL, so the engine wouldn't
+    // recognise the preloaded deck and would throw the buffered audio away —
+    // and on Jellyfin it would leave an orphaned encoder behind.
+    const prefetched =
+      !opts.forceTranscode && startAt === 0 && pendingSong?.id === song.id && pendingDeck
+        ? { deck: pendingDeck, stream: pendingStream }
+        : null;
+    if (prefetched) {
+      pendingSong = null;
+      pendingStream = null;
+      pendingDeck = null;
+    }
+
+    const { deck, stream } =
+      prefetched ??
+      (await resolveDeck(song, {
+        startSeconds: startAt,
+        forceTranscode: opts.forceTranscode,
+      }));
+    // The user moved on while we were negotiating — drop this result.
+    if (token !== playToken) return;
+
+    activeStream = stream;
+    activeSong = song;
+    startReported = false;
+    lastProgressReport = 0;
+
+    await engine.play(deck);
+
+    // Resume from a saved position. When the server already applied the offset
+    // (a transcode restarted at startTimeTicks) the stream is *at* that point
+    // and seeking again would be wrong.
+    if (startAt > 0 && (deck.startOffset ?? 0) === 0 && engine.isSeekable()) {
+      engine.seek(startAt);
+    }
+
     notifyNowPlaying(song);
     prefetchNext();
     void maybeTopUpRadio();
@@ -218,7 +318,33 @@ function createPlayer() {
       engine.prepareNext(null);
       return;
     }
-    engine.prepareNext(deckTrack(state.queue[next]));
+    const song = state.queue[next];
+    // Repeat-one preloads the track that's already playing. On Jellyfin that
+    // means a second negotiation for the same item while the first is live —
+    // pointless work, and on the transcode path two encodes racing each other.
+    // The engine replays the active deck for repeat-one anyway.
+    if (!song || song.id === current()?.id) {
+      engine.prepareNext(null);
+      releasePrefetched();
+      return;
+    }
+    // Already queued up: leave it alone. prefetchNext() runs on every queue
+    // edit, and re-resolving would mint a fresh stream (and, on Jellyfin, a
+    // fresh encoder) for a track we've already buffered.
+    if (pendingSong?.id === song.id && pendingDeck) {
+      engine.prepareNext(pendingDeck);
+      return;
+    }
+    releasePrefetched();
+    const token = playToken;
+    void resolveDeck(song).then(({ deck, stream }) => {
+      // Don't install a prefetch that resolved after the queue moved on.
+      if (token !== playToken) return;
+      engine.prepareNext(deck);
+      pendingSong = song;
+      pendingStream = stream;
+      pendingDeck = deck;
+    });
   }
 
   function peekNextIndex(): number | null {
@@ -480,12 +606,22 @@ function createPlayer() {
       setState({ index: n, currentTime: 0, duration: next?.duration ?? 0 });
       setScrobbled(false);
     });
+    // The deck that just faded in is the one we prefetched, so adopt its
+    // negotiated stream as the active one.
+    activeSong = pendingSong ?? next ?? null;
+    activeStream = pendingStream;
+    pendingSong = null;
+    pendingStream = null;
+    pendingDeck = null;
+    startReported = false;
+    lastProgressReport = 0;
     if (next) notifyNowPlaying(next);
     prefetchNext();
     void maybeTopUpRadio();
   }
 
   function stop(): void {
+    reportStop(engine.getCurrentTime());
     engine.stop();
     setState({ isPlaying: false, currentTime: 0, duration: 0 });
   }
@@ -493,6 +629,9 @@ function createPlayer() {
   function seek(time: number): void {
     engine.seek(time);
     setState("currentTime", time);
+    // Tell the server where we jumped to; on Jellyfin this keeps the remote's
+    // scrubber and the resume point honest.
+    reportEvent("progress", time);
   }
 
   function seekBy(delta: number): void {
@@ -526,15 +665,99 @@ function createPlayer() {
     prefetchNext();
   }
 
-  // --- Scrobbling ---
+  // --- Playback reporting ---
+  //
+  // Two protocols hide behind one set of calls:
+  //
+  //   Subsonic  — a now-playing ping on start, and one submission scrobble once
+  //               the listen threshold is crossed. Progress isn't a concept.
+  //   Jellyfin  — a real session: start, periodic progress, and a single stop at
+  //               the end. The *stop* is what banks the play count and clears
+  //               the resume point, which is why it must never be sent
+  //               mid-track. (Sending it halfway also drops the track from the
+  //               server's Now Playing and leaves a bogus resume position.)
+
+  function reportBase(position: number) {
+    return {
+      positionSeconds: Math.max(0, position),
+      durationSeconds: state.duration || undefined,
+      isPaused: !state.isPlaying,
+      isMuted: state.muted,
+      volume: state.volume,
+      repeat: state.repeat,
+      shuffle: state.shuffle,
+      queue: state.queue.slice(state.index, state.index + 20).map((s) => ({ id: s.id })),
+    };
+  }
+
+  function reportEvent(event: "start" | "progress" | "pause", position: number): void {
+    const c = client();
+    const song = activeSong;
+    if (!c || !song || song.isRadio) return;
+    if (!settings.playback.scrobble) return;
+    if (event === "start") startReported = true;
+    else if (!startReported) return;
+    void c
+      .reportPlayback(event, { songId: song.id, stream: activeStream ?? undefined, ...reportBase(position) })
+      .catch(() => {});
+  }
+
+  // End the current server-side playback exactly once, then forget it.
+  function reportStop(position: number): void {
+    const c = client();
+    const song = activeSong;
+    activeSong = null;
+    const stream = activeStream;
+    activeStream = null;
+    const wasStarted = startReported;
+    startReported = false;
+    if (!c || !song || song.isRadio || !wasStarted) return;
+    if (!settings.playback.scrobble) return;
+    void c
+      .reportPlayback("stop", {
+        songId: song.id,
+        stream: stream ?? undefined,
+        ...reportBase(position),
+        isPaused: false,
+      })
+      .catch(() => {});
+  }
+
+  // Discard a prefetched stream that will never be played, releasing whatever
+  // the server set up for it. Never reported as a "start", so this is purely a
+  // teardown — Jellyfin keys the kill on the PlaySessionId.
+  function releasePrefetched(): void {
+    const c = client();
+    const song = pendingSong;
+    const stream = pendingStream;
+    pendingSong = null;
+    pendingStream = null;
+    pendingDeck = null;
+    if (!c || !song || song.isRadio || !stream?.playSessionId) return;
+    void c
+      .reportPlayback("stop", { songId: song.id, stream, positionSeconds: 0 })
+      .catch(() => {});
+  }
+
+  function maybeReportProgress(time: number): void {
+    if (client()?.playbackReporting !== "session") return;
+    const now = performance.now();
+    if (now - lastProgressReport < PROGRESS_REPORT_MS) return;
+    lastProgressReport = now;
+    reportEvent("progress", time);
+  }
 
   function notifyNowPlaying(song: Song): void {
-    if (song.isRadio) return; // not a library track — nothing to scrobble
+    if (song.isRadio) return; // not a library track — nothing to report
     if (!settings.playback.scrobble) return;
-    client()?.scrobble(song.id, false).catch(() => {});
+    reportEvent("start", state.currentTime);
   }
 
   function maybeScrobble(time: number, duration: number): void {
+    // Jellyfin banks the play from the stop report, so a mid-track submission
+    // here would double-count it (and, before this split, actively broke the
+    // stream by ending the session).
+    if (client()?.playbackReporting !== "scrobble") return;
     if (scrobbled() || !settings.playback.scrobble) return;
     if (duration <= 0) return;
     // Last.fm-style: submit after 4 minutes or half the track, whichever first.
@@ -581,6 +804,13 @@ function createPlayer() {
     }
   }
 
+  // Closing the tab should end the server-side playback, not leave a phantom
+  // "now playing" and a running encoder behind. The stop report is sent with
+  // keepalive so it survives teardown.
+  if (typeof window !== "undefined") {
+    window.addEventListener("pagehide", () => reportStop(engine.getCurrentTime()));
+  }
+
   return {
     state,
     playNow,
@@ -595,6 +825,9 @@ function createPlayer() {
     stop,
     seek,
     seekBy,
+    // True when the current stream can be scrubbed in place. A server-side
+    // transcode can still be "seeked" — it just reopens at the new offset.
+    isSeekable: () => engine.isSeekable(),
     setVolume,
     changeVolume,
     toggleMute,

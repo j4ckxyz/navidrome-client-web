@@ -48,6 +48,22 @@ export async function vibeRoulette(): Promise<boolean> {
   return true;
 }
 
+// Start a radio station seeded from any item. Jellyfin generates these
+// server-side (InstantMix) for albums, artists and genres as well as tracks;
+// Subsonic only knows similar-songs, so its client picks a representative
+// track first. Returns false when the server produced nothing.
+export async function playInstantMix(
+  id: string,
+  kind: "song" | "album" | "artist" | "genre",
+): Promise<boolean> {
+  const c = client();
+  if (!c) return false;
+  const songs = await c.getInstantMix(id, kind, 50);
+  if (songs.length === 0) return false;
+  player.playNow(songs, 0);
+  return true;
+}
+
 function shuffled<T>(arr: T[]): T[] {
   const copy = [...arr];
   for (let i = copy.length - 1; i > 0; i--) {

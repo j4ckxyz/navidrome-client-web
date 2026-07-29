@@ -1,7 +1,7 @@
 {
-  "name": "navidrome-client-web",
+  "name": "tonearm",
   "version": "0.1.0",
-  "description": "A modern, desktop-first web client for Navidrome",
+  "description": "A modern, desktop-first web client for Navidrome and Jellyfin music libraries",
   "type": "module",
   "private": true,
   "scripts": {

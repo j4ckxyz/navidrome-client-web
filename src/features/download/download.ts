@@ -7,6 +7,7 @@
 // the files are zipped by *our* backend (/download/zip), which only exists when
 // the app runs in proxy mode. See [[project-status]] and [[local-tooling]].
 
+import { Zip, ZipPassThrough } from "fflate";
 import type { Song } from "~/api/types";
 import { client } from "~/auth/session";
 
@@ -148,6 +149,110 @@ export function downloadCollectionOriginal(id: string): void {
   const c = client();
   if (!c) return;
   navigateDownload(c.downloadUrl(id));
+}
+
+// Download an album/playlist by zipping it up *in the browser*.
+//
+// Jellyfin has no server-side "zip this album" endpoint, and our own proxy only
+// fronts Navidrome — so without this, Jellyfin users could only ever save one
+// track at a time. Tracks are fetched one at a time and pushed straight into a
+// streaming ZIP (stored, not recompressed — audio is already compressed).
+//
+// Where the browser supports the File System Access API the archive streams
+// directly to the chosen file, so a 3 GB box set never has to fit in memory.
+// Everywhere else it falls back to buffering a Blob, which is fine for an album
+// and the only option Safari/Firefox give us.
+export async function downloadCollectionClientZip(opts: {
+  songs: Song[];
+  quality: Quality;
+  zipBaseName: string;
+  byTrackNumber: boolean;
+  onProgress?: (done: number, total: number) => void;
+  signal?: AbortSignal;
+}): Promise<void> {
+  const c = client();
+  if (!c) return;
+  const names = collectionEntryNames(opts.songs, opts.quality.ext, opts.byTrackNumber);
+  const zipName = `${sanitizeName(opts.zipBaseName)}.zip`;
+
+  const sink = await openZipSink(zipName);
+  const chunks: Uint8Array[] = [];
+
+  let settle!: (err?: Error) => void;
+  const finished = new Promise<void>((resolve, reject) => {
+    settle = (err?: Error) => (err ? reject(err) : resolve());
+  });
+
+  const zip = new Zip((err, chunk, final) => {
+    if (err) {
+      settle(err);
+      return;
+    }
+    if (sink) void sink.write(chunk);
+    else chunks.push(chunk);
+    if (final) settle();
+  });
+
+  try {
+    for (let i = 0; i < opts.songs.length; i++) {
+      opts.signal?.throwIfAborted();
+      const song = opts.songs[i];
+      const url = isLossy(opts.quality)
+        ? c.streamUrl(song.id, opts.quality.bitRate, opts.quality.format)
+        : c.downloadUrl(song.id);
+
+      const res = await fetch(url, { signal: opts.signal });
+      if (!res.ok || !res.body) continue; // skip an unreachable track, keep going
+
+      const entry = new ZipPassThrough(names[i]);
+      zip.add(entry);
+      const reader = res.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) entry.push(value);
+      }
+      entry.push(new Uint8Array(0), true);
+      opts.onProgress?.(i + 1, opts.songs.length);
+    }
+    zip.end();
+    await finished;
+  } catch (err) {
+    zip.terminate();
+    await sink?.abort();
+    throw err;
+  }
+
+  if (sink) await sink.close();
+  else saveBlob(new Blob(chunks as BlobPart[], { type: "application/zip" }), zipName);
+}
+
+// A place to put ZIP bytes as they're produced. Returns null when the browser
+// has no streaming file API and we must buffer instead.
+interface ZipSink {
+  write(chunk: Uint8Array): Promise<void>;
+  close(): Promise<void>;
+  abort(): Promise<void>;
+}
+
+async function openZipSink(suggestedName: string): Promise<ZipSink | null> {
+  const picker = (window as any).showSaveFilePicker;
+  if (typeof picker !== "function") return null;
+  try {
+    const handle = await picker.call(window, {
+      suggestedName,
+      types: [{ description: "ZIP archive", accept: { "application/zip": [".zip"] } }],
+    });
+    const stream = await handle.createWritable();
+    return {
+      write: (chunk) => stream.write(chunk),
+      close: () => stream.close(),
+      abort: () => stream.abort().catch(() => {}),
+    };
+  } catch {
+    // User cancelled the picker, or it isn't usable here — buffer instead.
+    return null;
+  }
 }
 
 // Download an album/playlist transcoded to a lossy format, zipped by our backend.

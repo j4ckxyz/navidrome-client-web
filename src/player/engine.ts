@@ -18,6 +18,17 @@ export interface DeckTrack {
   url: string;
   replayGainDb: number; // 0 when normalization is off
   peak: number; // 1 when unknown; used to avoid clipping
+  // Seconds the server already skipped before the first byte of this stream.
+  // Non-zero only when a seek was satisfied server-side (Jellyfin transcode).
+  startOffset?: number;
+  // False for a live server-side transcode: the response has no stable
+  // byte↔time mapping, so moving element.currentTime lands somewhere arbitrary.
+  // The player re-requests the stream from a new offset instead.
+  canSeek?: boolean;
+  // Known length from metadata, used when the element can't report its own
+  // (progressive transcodes have no Content-Length, so duration is Infinity or
+  // a drifting estimate).
+  duration?: number;
 }
 
 export interface EqualizerState {
@@ -30,6 +41,9 @@ interface Deck {
   el: HTMLAudioElement;
   url: string | null;
   gain: number; // ReplayGain multiplier (1 = unity)
+  startOffset: number;
+  canSeek: boolean;
+  duration: number; // 0 = unknown, fall back to the element
 }
 
 // The Web Audio graph for a single deck:
@@ -49,6 +63,12 @@ export interface EngineCallbacks {
   onEnded: () => void;
   onPlayingChange: (playing: boolean) => void;
   onCrossfadeStart: () => void;
+  // The element refused the media (decode error, 404, dead transcode). The
+  // player decides whether to retry transcoded or skip on.
+  onError: (code: number | undefined) => void;
+  // A seek was requested on a stream the element can't scrub. The player
+  // re-resolves the stream starting at `time` instead.
+  onSeekUnsupported: (time: number) => void;
 }
 
 function clampDb(db: number): number {
@@ -109,13 +129,16 @@ export class AudioEngine {
       });
 
       el.addEventListener("error", () => {
-        if (index === this.active) {
-          this.cb.onPlayingChange(false);
-          this.stopProgressLoop();
-        }
+        // Tearing a deck down (stop(), or swapping src) can surface an error on
+        // an element we no longer care about. Only a deck that's meant to be
+        // playing something counts as a real failure.
+        if (index !== this.active || !this.decks[index].url) return;
+        this.cb.onPlayingChange(false);
+        this.stopProgressLoop();
+        this.cb.onError(el.error?.code);
       });
 
-      return { el, url: null, gain: 1 };
+      return { el, url: null, gain: 1, startOffset: 0, canSeek: true, duration: 0 };
     };
     this.decks = [mk(0), mk(1)];
 
@@ -314,6 +337,13 @@ export class AudioEngine {
     for (const d of this.decks) this.applyVolume(d, 1);
   }
 
+  private applyTrack(deck: Deck, track: DeckTrack): void {
+    deck.url = track.url;
+    deck.startOffset = track.startOffset ?? 0;
+    deck.canSeek = track.canSeek !== false;
+    deck.duration = track.duration ?? 0;
+  }
+
   prepareNext(track: DeckTrack | null): void {
     const idle = this.idleDeck();
     if (!track) {
@@ -322,7 +352,7 @@ export class AudioEngine {
     }
     if (idle.url === track.url) return;
     idle.el.src = track.url;
-    idle.url = track.url;
+    this.applyTrack(idle, track);
     idle.el.load();
   }
 
@@ -334,12 +364,14 @@ export class AudioEngine {
     if (this.idleDeck().url === track.url) {
       deck = this.idleDeck();
       this.active ^= 1;
+      this.applyTrack(deck, track);
     } else {
       deck = this.activeDeck();
-      if (deck.url !== track.url) {
-        deck.el.src = track.url;
-        deck.url = track.url;
-      }
+      // Always re-assign src, even when the URL matches: replaying the current
+      // track (repeat-one, or a restart after a seek on a transcode) has to pull
+      // a fresh stream rather than reuse a response that has already played out.
+      deck.el.src = track.url;
+      this.applyTrack(deck, track);
     }
 
     const other = this.idleDeck();
@@ -347,7 +379,15 @@ export class AudioEngine {
 
     deck.gain = gainFromDb(track.replayGainDb, track.peak);
     this.applyVolume(deck, 1);
-    deck.el.currentTime = 0;
+    // A fresh stream already starts at zero, and assigning currentTime before
+    // metadata arrives throws on some browsers.
+    if (deck.el.currentTime > 0 && deck.el.seekable.length > 0) {
+      try {
+        deck.el.currentTime = 0;
+      } catch {
+        // not seekable yet — it starts at zero anyway
+      }
+    }
     try {
       await deck.el.play();
     } catch (err) {
@@ -392,15 +432,31 @@ export class AudioEngine {
     requestAnimationFrame(step);
   }
 
+  // `time` is absolute within the track, i.e. it already includes any offset the
+  // server applied when the stream was opened.
   seek(time: number): void {
-    const el = this.activeDeck().el;
+    const deck = this.activeDeck();
+    const target = Math.max(0, time);
+    if (!deck.canSeek) {
+      // A live transcode can't be scrubbed in place — ask the player to reopen
+      // the stream at the new position.
+      this.cb.onSeekUnsupported(target);
+      return;
+    }
+    const el = deck.el;
     if (Number.isFinite(el.duration)) {
-      el.currentTime = Math.max(0, Math.min(el.duration, time));
+      el.currentTime = Math.max(0, Math.min(el.duration, target - deck.startOffset));
     }
   }
 
   getCurrentTime(): number {
-    return this.activeDeck().el.currentTime;
+    const deck = this.activeDeck();
+    return deck.el.currentTime + deck.startOffset;
+  }
+
+  // Whether the current stream can be scrubbed without reopening it.
+  isSeekable(): boolean {
+    return this.activeDeck().canSeek;
   }
 
   hasActiveTrack(): boolean {
@@ -413,6 +469,9 @@ export class AudioEngine {
       deck.el.removeAttribute("src");
       deck.el.load();
       deck.url = null;
+      deck.startOffset = 0;
+      deck.canSeek = true;
+      deck.duration = 0;
     }
     this.cb.onPlayingChange(false);
     this.stopProgressLoop();
@@ -423,7 +482,13 @@ export class AudioEngine {
     if (!next.url) return false;
     const cur = this.activeDeck();
 
-    next.el.currentTime = 0;
+    if (next.el.currentTime > 0 && next.el.seekable.length > 0) {
+      try {
+        next.el.currentTime = 0;
+      } catch {
+        // preloaded stream isn't seekable yet — it plays from its start anyway
+      }
+    }
     void next.el.play();
 
     this.xfadeActive = true;
@@ -450,9 +515,17 @@ export class AudioEngine {
   private startProgressLoop(): void {
     if (this.raf) return;
     const tick = () => {
-      const el = this.activeDeck().el;
-      const dur = Number.isFinite(el.duration) ? el.duration : 0;
-      this.cb.onProgress(el.currentTime, dur);
+      const deck = this.activeDeck();
+      const el = deck.el;
+      // A seekable deck is a real file, so its own duration is exact — prefer
+      // it. A progressive transcode reports Infinity or a drifting estimate
+      // instead, which makes the scrubber jitter and fires the scrobble
+      // threshold at the wrong moment; there, trust the server's metadata.
+      const elementDur = Number.isFinite(el.duration) ? el.duration : 0;
+      const dur = deck.canSeek
+        ? elementDur || deck.duration
+        : deck.duration || elementDur;
+      this.cb.onProgress(el.currentTime + deck.startOffset, dur);
 
       if (this.xfadeActive && this.crossfadeSeconds > 0) {
         const t = Math.min((performance.now() - this.xfadeStartTime) / (this.crossfadeSeconds * 1000), 1);
@@ -465,7 +538,7 @@ export class AudioEngine {
         !this.xfadeActive &&
         dur > 0 &&
         this.idleDeck().url &&
-        dur - el.currentTime <= this.crossfadeSeconds
+        dur - (el.currentTime + deck.startOffset) <= this.crossfadeSeconds
       ) {
         this.beginCrossfade();
       }

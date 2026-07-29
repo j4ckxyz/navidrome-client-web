@@ -6,6 +6,12 @@
 import { md5, randomSalt } from "./md5";
 import { ApiError, type NativeLoginResponse } from "./types";
 import type { ServerType } from "./MusicClient";
+import {
+  APP_VERSION,
+  JELLYFIN_CLIENT,
+  JELLYFIN_DEVICE_NAME,
+  SUBSONIC_CLIENT,
+} from "~/lib/branding";
 
 const STORAGE_PREFIX = "nd:auth:";
 const ACTIVE_KEY = "nd:auth:active";
@@ -177,7 +183,7 @@ export async function loginSubsonic(
     t: token,
     s: salt,
     v: "1.16.1",
-    c: "navidrome-web",
+    c: SUBSONIC_CLIENT,
     f: "json",
   });
   const url = `${serverUrl}/rest/ping.view?${params.toString()}`;
@@ -219,7 +225,7 @@ export async function loginWithToken(
     t: token,
     s: salt,
     v: "1.16.1",
-    c: "navidrome-web",
+    c: SUBSONIC_CLIENT,
     f: "json",
   });
   const res = await fetch(`${serverUrl}/rest/ping.view?${params.toString()}`).catch(() => {
@@ -243,17 +249,14 @@ export async function loginWithToken(
 
 // --- Jellyfin ---------------------------------------------------------------
 
-const JELLYFIN_CLIENT = "Navidrome Web";
-const JELLYFIN_VERSION = "1.0.0";
-
 // The X-Emby-Authorization header Jellyfin expects on auth (and accepts on every
 // request). Carries the client identity + this browser's device id.
 export function jellyfinAuthHeader(deviceId: string, token?: string): string {
   const parts = [
     `MediaBrowser Client="${JELLYFIN_CLIENT}"`,
-    `Device="Browser"`,
+    `Device="${JELLYFIN_DEVICE_NAME}"`,
     `DeviceId="${deviceId}"`,
-    `Version="${JELLYFIN_VERSION}"`,
+    `Version="${APP_VERSION}"`,
   ];
   if (token) parts.push(`Token="${token}"`);
   return parts.join(", ");
@@ -295,10 +298,27 @@ export async function loginJellyfin(
   if (!data.AccessToken || !data.User?.Id) {
     throw new ApiError("Server response missing access token");
   }
+  return jellyfinCreds(serverUrl, deviceId, data, username);
+}
+
+interface JellyfinAuthResult {
+  AccessToken?: string;
+  User?: { Id?: string; Name?: string; Policy?: { IsAdministrator?: boolean } };
+}
+
+function jellyfinCreds(
+  serverUrl: string,
+  deviceId: string,
+  data: JellyfinAuthResult,
+  fallbackName = "",
+): ServerCredentials {
+  if (!data.AccessToken || !data.User?.Id) {
+    throw new ApiError("Server response missing access token");
+  }
   return {
     serverType: "jellyfin",
     serverUrl,
-    username: data.User.Name ?? username,
+    username: data.User.Name ?? fallbackName,
     authMethod: "jellyfin",
     subsonicSalt: "",
     subsonicToken: "",
@@ -308,4 +328,77 @@ export async function loginJellyfin(
     isAdmin: data.User.Policy?.IsAdministrator ?? false,
     savedAt: Date.now(),
   };
+}
+
+// --- Jellyfin Quick Connect --------------------------------------------------
+//
+// Sign in without typing a password: the server issues a short code, the user
+// approves it from an already-signed-in Jellyfin client, and this device gets
+// its own access token. Every mainstream Jellyfin client offers this, and it's
+// the only comfortable way to sign in on a TV or a shared machine.
+
+export interface QuickConnectRequest {
+  secret: string;
+  code: string;
+}
+
+export async function quickConnectAvailable(serverUrl: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${serverUrl}/QuickConnect/Enabled`);
+    if (!res.ok) return false;
+    return (await res.json()) === true;
+  } catch {
+    return false;
+  }
+}
+
+export async function quickConnectInitiate(serverUrl: string): Promise<QuickConnectRequest> {
+  const deviceId = getDeviceId();
+  let res: Response;
+  try {
+    res = await fetch(`${serverUrl}/QuickConnect/Initiate`, {
+      method: "POST",
+      headers: {
+        Authorization: jellyfinAuthHeader(deviceId),
+        "X-Emby-Authorization": jellyfinAuthHeader(deviceId),
+      },
+    });
+  } catch {
+    throw new ApiError(`Could not reach ${serverUrl}.`);
+  }
+  if (res.status === 401) {
+    throw new ApiError("Quick Connect is disabled on this server.", 401);
+  }
+  if (!res.ok) throw new ApiError(`Quick Connect failed (HTTP ${res.status})`, res.status);
+  const data = (await res.json()) as { Secret?: string; Code?: string };
+  if (!data.Secret || !data.Code) throw new ApiError("Quick Connect returned no code");
+  return { secret: data.Secret, code: data.Code };
+}
+
+// Has the user approved the code yet? Returns null while still pending.
+export async function quickConnectPoll(
+  serverUrl: string,
+  secret: string,
+): Promise<ServerCredentials | null> {
+  const deviceId = getDeviceId();
+  const state = await fetch(
+    `${serverUrl}/QuickConnect/Connect?secret=${encodeURIComponent(secret)}`,
+  ).catch(() => null);
+  if (!state) throw new ApiError(`Could not reach ${serverUrl}.`);
+  if (state.status === 404) throw new ApiError("This Quick Connect code expired. Start again.");
+  if (!state.ok) throw new ApiError(`Quick Connect failed (HTTP ${state.status})`, state.status);
+  const result = (await state.json()) as { Authenticated?: boolean };
+  if (!result.Authenticated) return null;
+
+  const res = await fetch(`${serverUrl}/Users/AuthenticateWithQuickConnect`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: jellyfinAuthHeader(deviceId),
+      "X-Emby-Authorization": jellyfinAuthHeader(deviceId),
+    },
+    body: JSON.stringify({ Secret: secret }),
+  }).catch(() => null);
+  if (!res?.ok) throw new ApiError("Quick Connect approval could not be exchanged for a token");
+  return jellyfinCreds(serverUrl, deviceId, (await res.json()) as JellyfinAuthResult);
 }

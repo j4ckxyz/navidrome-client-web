@@ -6,11 +6,13 @@ product
 
 ## Users
 
-A small household or close group (family, roommates, friends) sharing a self-hosted Navidrome music server. These are people who actively curate their own music library — they chose to run their own server rather than stream from a platform. They know their collection intimately. They use this daily, in the background, to play music they own and love.
+A small household or close group (family, roommates, friends) sharing a self-hosted music server — Navidrome or Jellyfin. These are people who actively curate their own music library — they chose to run their own server rather than stream from a platform. They know their collection intimately. They use this daily, in the background, to play music they own and love.
 
 ## Product Purpose
 
-A web client for Navidrome's Subsonic-compatible API. Lets users browse their personal music library, play tracks, manage queues, and navigate artists and albums — without the noise of recommendation algorithms, social features, or platform branding. Success means the music plays, the library is easy to navigate, and the interface gets out of the way.
+Tonearm is a web client for a self-hosted music library, speaking Navidrome's Subsonic-compatible API and Jellyfin's native API as equals. Lets users browse their personal music library, play tracks, manage queues, and navigate artists and albums — without the noise of recommendation algorithms, social features, or platform branding. Success means the music plays, the library is easy to navigate, and the interface gets out of the way.
+
+The name is deliberately not a server's name: the app outlives whichever backend you happen to run, and a tonearm is the part of a record player that actually touches the music.
 
 ## Brand Personality
 

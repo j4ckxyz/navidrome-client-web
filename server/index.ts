@@ -1,4 +1,4 @@
-// Bun/Hono backend for navidrome-client-web.
+// Bun/Hono backend for Tonearm.
 //
 // When NAVIDROME_URL is set (e.g. http://navidrome:4533), this server acts as
 // a transparent proxy for all Navidrome REST + auth endpoints. The browser
@@ -35,7 +35,8 @@ const MUSIC_DIR = (process.env.MUSIC_DIR ?? "").replace(/\/+$/, "");
 const OG_USER = process.env.NAVIDROME_OG_USER ?? "";
 const OG_PASS = process.env.NAVIDROME_OG_PASS ?? "";
 const SUBSONIC_VERSION = "1.16.1";
-const SUBSONIC_CLIENT = "navidrome-web";
+const APP_NAME = "Tonearm";
+const SUBSONIC_CLIENT = "tonearm";
 const linkPreviewsEnabled = !!(NAVIDROME_URL && OG_USER && OG_PASS);
 
 const AUDIO_EXTS = new Set([
@@ -181,8 +182,8 @@ async function verifyAdmin(opts: {
         u: opts.subUser,
         t: opts.subToken,
         s: opts.subSalt,
-        v: "1.16.1",
-        c: "navidrome-web",
+        v: SUBSONIC_VERSION,
+        c: SUBSONIC_CLIENT,
         f: "json",
         username: opts.subUser,
       });
@@ -221,7 +222,7 @@ async function triggerScan(h: AuthHeaders): Promise<boolean> {
     if (h.subUser && h.subToken && h.subSalt) {
       const params = new URLSearchParams({
         u: h.subUser, t: h.subToken, s: h.subSalt,
-        v: "1.16.1", c: "navidrome-web", f: "json",
+        v: SUBSONIC_VERSION, c: SUBSONIC_CLIENT, f: "json",
       });
       const res = await fetch(`${NAVIDROME_URL}/rest/startScan.view?${params}`);
       return res.ok;
@@ -762,10 +763,10 @@ async function previewMeta(kind: string, id: string): Promise<PreviewMeta | null
 
 // Inject preview meta into the SPA shell and override its <title>.
 function injectPreview(html: string, meta: PreviewMeta, url: string, origin: string): string {
-  const fullTitle = `${meta.title} · Navidrome`;
+  const fullTitle = `${meta.title} · ${APP_NAME}`;
   const image = meta.coverArt ? `${origin}/og/cover/${encodeURIComponent(meta.coverArt)}` : "";
   const tags = [
-    `<meta property="og:site_name" content="Navidrome" />`,
+    `<meta property="og:site_name" content="${escapeHtml(APP_NAME)}" />`,
     `<meta property="og:type" content="${escapeHtml(meta.ogType)}" />`,
     `<meta property="og:title" content="${escapeHtml(fullTitle)}" />`,
     `<meta property="og:description" content="${escapeHtml(meta.description)}" />`,
@@ -906,7 +907,7 @@ const server = Bun.serve({
   maxRequestBodySize: 4 * 1024 * 1024 * 1024, // 4 GB
 });
 
-console.log(`navidrome-client-web listening on port ${server.port}`);
+console.log(`${APP_NAME} listening on port ${server.port}`);
 if (NAVIDROME_URL) {
   console.log(`Proxy mode: forwarding /rest/* and /auth/* → ${NAVIDROME_URL}`);
 } else {

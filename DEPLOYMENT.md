@@ -49,7 +49,7 @@ Uploads are intentionally impossible here (the host has no access to users' musi
    Or by hand:
 
    ```bash
-   docker run -d -p 8680:8080 --name navidrome-web navidrome-client-web
+   docker run -d -p 8680:8080 --name tonearm tonearm
    ```
 
 2. Users open the site and enter their **own** server URL, username, and password.
@@ -65,7 +65,7 @@ Uploads are intentionally impossible here (the host has no access to users' musi
    ```nginx
    server {
        server_name music.example.com;
-       location /        { proxy_pass http://navidrome-web:8080; }
+       location /        { proxy_pass http://tonearm:8080; }
        location /rest/   { proxy_pass http://navidrome:4533; }
        location /auth/   { proxy_pass http://navidrome:4533; }
        location /api/    { proxy_pass http://navidrome:4533; }
@@ -167,7 +167,7 @@ By hand:
 ```bash
 docker run -d -p 8680:8080 \
   -e NAVIDROME_URL=https://navidrome.example.com \
-  --name navidrome-web navidrome-client-web
+  --name tonearm tonearm
 ```
 
 Because `NAVIDROME_URL` is set, there's no CORS to deal with. Because no music
@@ -282,14 +282,14 @@ bun run update
 It works in three safe steps:
 
 1. **Inspects your setup first** and prints a plan before changing anything. It reads
-   the exact Compose project and compose file that created your running `navidrome-web`
+   the exact Compose project and compose file that created your running `tonearm`
    container, so it always rebuilds *your* deployment — full stack or client-only —
    rather than guessing.
 2. **Updates the source** from GitHub (`origin`) if there's a newer version,
    **without touching your local `docker-compose*.yml` or `.env`** files.
 3. **Rebuilds in place** with `up -d --build` against your own project only.
 
-Because it only ever acts on the project that owns `navidrome-web` and never removes
+Because it only ever acts on the project that owns `tonearm` and never removes
 a `navidrome` container, it **cannot touch a Navidrome you run separately**, and the
 "container name already in use" conflict is impossible. The command is cross-platform
 (Windows, macOS, Linux) and supports Docker Compose v2 (`docker compose`) and v1

@@ -16,6 +16,7 @@ import {
   downloadSong,
   downloadCollectionOriginal,
   downloadCollectionZip,
+  downloadCollectionClientZip,
   type Quality,
 } from "./download";
 import "./download.css";
@@ -27,6 +28,9 @@ export type DownloadTarget =
 
 const [target, setTarget] = createSignal<DownloadTarget | null>(null);
 const [busy, setBusy] = createSignal(false);
+// "3 of 12" while a client-side zip is being assembled — it can take a while,
+// and a dialog that just sits there looks broken.
+const [progress, setProgress] = createSignal<{ done: number; total: number } | null>(null);
 
 export function openDownload(t: DownloadTarget): void {
   if (t.kind !== "song" && t.songs.length === 0) return;
@@ -43,21 +47,24 @@ function subtitle(t: DownloadTarget): string {
 }
 
 export function DownloadDialog() {
-  // Whole-collection downloads need a server that can bundle the files. Navidrome
-  // zips them (originals server-side, lossy via our proxy); Jellyfin can't, so
-  // only single tracks are downloadable there.
-  const collectionSupported = createMemo(() => {
+  // Whether the server bundles a collection for us. Navidrome zips originals
+  // server-side and lossy versions through our proxy; Jellyfin has no such
+  // endpoint, so those get zipped in the browser instead (see download.ts).
+  const serverZips = createMemo(() => client()?.canDownloadCollections ?? false);
+  const clientZips = createMemo(() => {
     const t = target();
-    if (!t || t.kind === "song") return true;
-    return client()?.canDownloadCollections ?? false;
+    return !!t && t.kind !== "song" && !serverZips();
   });
 
-  // Lossy options for a whole collection are only possible when our backend can
-  // transcode + zip server-side (proxy mode). Single songs transcode anywhere.
+  // Lossy options for a whole collection need *somewhere* to transcode: our
+  // backend in proxy mode, or the browser pulling per-track transcodes from a
+  // server that can produce them. Single songs transcode anywhere.
   const allowLossy = createMemo(() => {
     const t = target();
     if (!t) return true;
-    return t.kind === "song" || (collectionSupported() && proxyMode());
+    if (t.kind === "song") return true;
+    if (serverZips()) return proxyMode();
+    return client()?.canTranscodeDownloads ?? false;
   });
 
   const qualities = createMemo(() =>
@@ -71,17 +78,29 @@ export function DownloadDialog() {
     try {
       if (t.kind === "song") {
         await downloadSong(t.song, q);
+        setTarget(null);
+        return;
+      }
+      const zipBase = t.kind === "album" && t.artist ? `${t.artist} - ${t.name}` : t.name;
+      if (clientZips()) {
+        // No server-side bundling (Jellyfin): assemble the archive here.
+        setProgress({ done: 0, total: t.songs.length });
+        await downloadCollectionClientZip({
+          songs: t.songs,
+          quality: q,
+          zipBaseName: zipBase,
+          byTrackNumber: t.kind === "album",
+          onProgress: (done, total) => setProgress({ done, total }),
+        });
       } else if (!isLossy(q)) {
         // Original collection: Navidrome zips the source files.
         downloadCollectionOriginal(t.id);
       } else {
         // Lossy collection: our backend transcodes and streams a zip.
-        const zipBaseName =
-          t.kind === "album" && t.artist ? `${t.artist} - ${t.name}` : t.name;
         downloadCollectionZip({
           songs: t.songs,
           quality: q,
-          zipBaseName,
+          zipBaseName: zipBase,
           byTrackNumber: t.kind === "album",
         });
       }
@@ -90,6 +109,7 @@ export function DownloadDialog() {
       alert(err instanceof Error ? err.message : "Download failed.");
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -118,16 +138,7 @@ export function DownloadDialog() {
               )}
             </Show>
 
-            <Show
-              when={collectionSupported()}
-              fallback={
-                <p class="dl-note muted">
-                  Whole-{target()?.kind} downloads aren't available on Jellyfin.
-                  You can still download individual tracks from a track's menu.
-                </p>
-              }
-            >
-              <div class="dl-qualities">
+            <div class="dl-qualities">
                 <For each={qualities()}>
                   {(q) => (
                     <button class="dl-quality" disabled={busy()} onClick={() => choose(q)}>
@@ -141,12 +152,26 @@ export function DownloadDialog() {
                 </For>
               </div>
 
-              <Show when={target() && target()!.kind !== "song" && !proxyMode()}>
+            <Show when={progress()}>
+              {(p) => (
                 <p class="dl-note muted">
-                  Transcoded (lossy) downloads of a whole {target()!.kind} need the
-                  bundled server in proxy mode. Original quality is available now.
+                  Building archive — track {p().done} of {p().total}…
                 </p>
-              </Show>
+              )}
+            </Show>
+
+            <Show when={clientZips() && !progress()}>
+              <p class="dl-note muted">
+                This server can't bundle a {target()!.kind}, so the archive is built
+                here in your browser. Keep this tab open until it finishes.
+              </p>
+            </Show>
+
+            <Show when={target() && target()!.kind !== "song" && serverZips() && !proxyMode()}>
+              <p class="dl-note muted">
+                Transcoded (lossy) downloads of a whole {target()!.kind} need the
+                bundled server in proxy mode. Original quality is available now.
+              </p>
             </Show>
           </Dialog.Content>
         </div>

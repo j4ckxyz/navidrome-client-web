@@ -171,3 +171,15 @@
   color: var(--sidebar-text);
   background: color-mix(in oklab, var(--sidebar-text) 10%, transparent);
 }
+
+/* Music-library picker. Only rendered when the backend exposes more than one
+   library (Jellyfin); Subsonic has a single namespace. */
+.sidebar-library {
+  display: block;
+  margin-bottom: 4px;
+}
+.sidebar-library-select {
+  width: 100%;
+  font-size: 13px;
+  padding: 7px 9px;
+}

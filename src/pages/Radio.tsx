@@ -85,8 +85,9 @@ export default function Radio() {
             <Icon name="radio" size={40} />
             <h2>Connect Jellyfin to listen to live radio</h2>
             <p class="muted">
-              Radio stations come from your Jellyfin server's Live TV channels (m3u tuners).
-              Link your Jellyfin account and they'll show up here.
+              Radio stations come from a Jellyfin server's Live TV channels (m3u tuners).
+              Sign in to Jellyfin — or link an account alongside Navidrome — and they'll
+              show up here.
             </p>
             <A href="/settings?tab=connections" class="btn btn-primary">
               <Icon name="link" size={16} /> Connect Jellyfin

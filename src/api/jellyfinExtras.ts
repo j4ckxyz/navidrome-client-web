@@ -1,18 +1,26 @@
-// Optional Jellyfin *companion* connection — distinct from api/jellyfin.ts,
-// which lets Jellyfin be the main music backend. Whatever the primary library
-// is, a companion Jellyfin server contributes two extras:
+// Jellyfin's non-music-library extras — distinct from api/jellyfin.ts, which
+// lets Jellyfin be the main music backend. Whichever backend holds the primary
+// library, a Jellyfin server contributes two things the Subsonic API has no
+// equivalent for:
 //   - Live TV channels (m3u tuners) played as internet radio
 //   - Music videos matched to the currently playing song
 //
-// The session (server URL + access token) lives in localStorage under
-// `nd:jellyfin-extras`, separate from primary credentials, and is exposed as a
-// signal so UI can react to connect/disconnect.
+// Where the session comes from depends on how you signed in:
+//   - Jellyfin as the primary backend → reuse that session automatically. No
+//     second login: you're already authenticated against the same server.
+//   - Navidrome as the primary backend → link a Jellyfin account separately;
+//     that companion session lives in localStorage under `nd:jellyfin-extras`.
+//
+// Exposed as a signal so UI can react to connect/disconnect either way.
 
 import { createSignal } from "solid-js";
+import { activeServerUrl, client } from "~/auth/session";
+import { loadCredentials } from "~/api/credentials";
+import { APP_VERSION, JELLYFIN_CLIENT, JELLYFIN_DEVICE_NAME } from "~/lib/branding";
 
 const STORAGE_KEY = "nd:jellyfin-extras";
-const CLIENT_NAME = "Navidrome Web";
-const CLIENT_VERSION = "0.1.0";
+const CLIENT_NAME = JELLYFIN_CLIENT;
+const CLIENT_VERSION = APP_VERSION;
 
 export interface JellyfinSession {
   serverUrl: string; // normalized, no trailing slash
@@ -47,9 +55,40 @@ export interface JellyfinMediaSource {
   TranscodingUrl?: string;
 }
 
-const [session, setSession] = createSignal<JellyfinSession | null>(loadSession());
+const [companion, setCompanion] = createSignal<JellyfinSession | null>(loadSession());
+
+// The Jellyfin session to use for extras: the primary login when it already
+// points at a Jellyfin server, otherwise the separately-linked companion.
+// Signing in to Jellyfin therefore lights up Radio and music videos with no
+// second login — which is what you'd expect, and what didn't happen before.
+function session(): JellyfinSession | null {
+  const primary = primarySession();
+  return primary ?? companion();
+}
+
+function primarySession(): JellyfinSession | null {
+  const c = client();
+  if (c?.serverType !== "jellyfin") return null;
+  const url = activeServerUrl();
+  if (!url) return null;
+  const creds = loadCredentials(url);
+  if (!creds?.accessToken || !creds.userId) return null;
+  return {
+    serverUrl: creds.serverUrl,
+    username: creds.username,
+    userId: creds.userId,
+    accessToken: creds.accessToken,
+    deviceId: creds.deviceId ?? deviceId(),
+  };
+}
 
 export { session as jellyfin };
+
+// True when the extras are riding on the primary login, so Settings can say so
+// instead of offering a redundant connect form.
+export function jellyfinIsPrimary(): boolean {
+  return primarySession() !== null;
+}
 
 function loadSession(): JellyfinSession | null {
   try {
@@ -79,7 +118,7 @@ export function normalizeJellyfinUrl(url: string): string {
 }
 
 function deviceId(): string {
-  const existing = session()?.deviceId;
+  const existing = companion()?.deviceId;
   if (existing) return existing;
   try {
     const cached = localStorage.getItem("nd:jellyfin-device");
@@ -88,18 +127,21 @@ function deviceId(): string {
     localStorage.setItem("nd:jellyfin-device", id);
     return id;
   } catch {
-    return "navidrome-web";
+    return "tonearm-web";
   }
 }
 
-function authHeader(token?: string): string {
+// Identify ourselves to Jellyfin. The device id must match the one the token
+// was issued to — when the extras ride on the primary login that's the primary
+// session's device, not the companion's, or Jellyfin registers us twice.
+function authHeader(s?: JellyfinSession | null): string {
   const parts = [
     `MediaBrowser Client="${CLIENT_NAME}"`,
-    `Device="Browser"`,
-    `DeviceId="${deviceId()}"`,
+    `Device="${JELLYFIN_DEVICE_NAME}"`,
+    `DeviceId="${s?.deviceId ?? deviceId()}"`,
     `Version="${CLIENT_VERSION}"`,
   ];
-  if (token) parts.push(`Token="${token}"`);
+  if (s?.accessToken) parts.push(`Token="${s.accessToken}"`);
   return parts.join(", ");
 }
 
@@ -136,12 +178,12 @@ export async function jellyfinLogin(
     deviceId: deviceId(),
   };
   persistSession(s);
-  setSession(s);
+  setCompanion(s);
 }
 
 export function jellyfinLogout(): void {
   persistSession(null);
-  setSession(null);
+  setCompanion(null);
 }
 
 // Authenticated GET against the Jellyfin API. Throws on non-2xx; a 401 clears
@@ -152,10 +194,12 @@ async function jfGet<T>(path: string, params?: Record<string, string>): Promise<
   const url = new URL(`${s.serverUrl}${path}`);
   for (const [k, v] of Object.entries(params ?? {})) url.searchParams.set(k, v);
   const res = await fetch(url.toString(), {
-    headers: { Authorization: authHeader(s.accessToken) },
+    headers: { Authorization: authHeader(s) },
   });
   if (res.status === 401) {
-    jellyfinLogout();
+    // Only clear the companion session here. When the extras are riding on the
+    // primary Jellyfin login, that session's own 401 handling owns re-auth.
+    if (!jellyfinIsPrimary()) jellyfinLogout();
     throw new Error("Jellyfin session expired — please reconnect");
   }
   if (!res.ok) throw new Error(`Jellyfin returned ${res.status}`);

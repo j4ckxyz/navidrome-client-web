@@ -6,8 +6,10 @@ import { ThemeProvider } from "~/theme/provider";
 import { initSession } from "~/auth/session";
 import { player } from "~/player/store";
 import { installMediaSession } from "~/player/mediaSession";
+import { installJellyfinRemote } from "~/player/jellyfinRemote";
 import { installListeners as installPwaListeners } from "~/lib/installPwa";
 import { loadServerConfig } from "~/lib/serverConfig";
+import { APP_NAME, APP_TAGLINE } from "~/lib/branding";
 import { App } from "./App";
 
 import "~/styles/global.css";
@@ -18,6 +20,9 @@ initSession();
 player.restoreQueue();
 // Lock-screen / media-key transport controls.
 installMediaSession();
+// Register as a controllable Jellyfin device ("Play On", remote control) when
+// the active backend is Jellyfin. No-op for Navidrome.
+installJellyfinRemote();
 // Catch beforeinstallprompt before the browser drops it.
 installPwaListeners();
 // Check if running with a backend proxy (non-blocking; sets proxyMode signal).
@@ -48,7 +53,7 @@ render(
 
 // A quiet hello for anyone who opens the console — no tracking, no telemetry.
 console.log(
-  "%c◉ Navidrome%c  your library, your rules — enjoy the music.",
+  `%c◉ ${APP_NAME}%c  ${APP_TAGLINE} — enjoy the music.`,
   "font-weight:700",
   "color:#9b9384",
 );

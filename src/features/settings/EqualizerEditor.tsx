@@ -154,7 +154,7 @@ export function EqualizerEditor() {
         <p class="muted settings-hint eq-cors-hint">
           The equalizer routes audio through Web Audio, which needs CORS-clean streams.
           It works automatically when this client runs in proxy mode (same origin). In
-          direct mode your Navidrome server must send <code>Access-Control-Allow-Origin</code>;
+          direct mode your music server must send <code>Access-Control-Allow-Origin</code>;
           otherwise audio may go silent and you'll need to reload after disabling.
         </p>
       </Show>

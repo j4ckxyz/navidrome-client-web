@@ -1,16 +1,24 @@
 // First-run setup / login. Talks directly to the user's music server from the
 // browser. Supports Navidrome (native or Subsonic / direct token) and Jellyfin
-// (username + password). The chosen backend is stored with the credentials so
-// the app knows which API surface to use. Shows previously-used servers for
-// quick switching.
+// (username + password, or Quick Connect). The chosen backend is stored with
+// the credentials so the app knows which API surface to use. Shows previously-
+// used servers for quick switching.
 
-import { createSignal, For, Show } from "solid-js";
-import { login, switchServer } from "./session";
-import { listKnownServers, loadCredentials } from "~/api/credentials";
+import { createSignal, For, onCleanup, Show } from "solid-js";
+import { adoptCredentials, login, switchServer } from "./session";
+import {
+  listKnownServers,
+  loadCredentials,
+  normalizeServerUrl,
+  quickConnectAvailable,
+  quickConnectInitiate,
+  quickConnectPoll,
+} from "~/api/credentials";
 import type { ServerType } from "~/api/MusicClient";
 import { ApiError } from "~/api/types";
 import { Icon } from "~/ui/Icon";
 import { proxyMode } from "~/lib/serverConfig";
+import { APP_NAME } from "~/lib/branding";
 import "./login.css";
 
 export function LoginScreen(props: { reauth?: boolean; prefillServer?: string; prefillUser?: string }) {
@@ -62,6 +70,59 @@ export function LoginScreen(props: { reauth?: boolean; prefillServer?: string; p
     if (creds) switchServer(creds);
   }
 
+  // --- Quick Connect ---
+  //
+  // Jellyfin issues a six-character code; the user approves it from a client
+  // that's already signed in, and this device gets its own token. No password
+  // ever touches this machine, which is the point on a TV or a shared browser.
+
+  const [qcCode, setQcCode] = createSignal<string | null>(null);
+  let qcPoll: ReturnType<typeof setInterval> | undefined;
+  onCleanup(() => {
+    if (qcPoll) clearInterval(qcPoll);
+  });
+
+  function stopQuickConnect() {
+    if (qcPoll) clearInterval(qcPoll);
+    qcPoll = undefined;
+    setQcCode(null);
+  }
+
+  async function startQuickConnect() {
+    setError(null);
+    let url: string;
+    try {
+      url = normalizeServerUrl(serverUrl());
+    } catch {
+      setError("Enter your Jellyfin server URL first.");
+      return;
+    }
+    setBusy(true);
+    try {
+      if (!(await quickConnectAvailable(url))) {
+        throw new ApiError("Quick Connect isn't enabled on this server.");
+      }
+      const { secret, code } = await quickConnectInitiate(url);
+      setQcCode(code);
+      qcPoll = setInterval(async () => {
+        try {
+          const creds = await quickConnectPoll(url, secret);
+          if (creds) {
+            stopQuickConnect();
+            adoptCredentials(creds);
+          }
+        } catch (err) {
+          stopQuickConnect();
+          setError(err instanceof Error ? err.message : "Quick Connect failed");
+        }
+      }, 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Quick Connect failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div class="login-screen">
       <div class="login-card">
@@ -73,7 +134,7 @@ export function LoginScreen(props: { reauth?: boolean; prefillServer?: string; p
             <h1>
               {props.reauth
                 ? "Session expired"
-                : `Connect to ${isJellyfin() ? "Jellyfin" : "Navidrome"}`}
+                : `${APP_NAME} · connect to ${isJellyfin() ? "Jellyfin" : "Navidrome"}`}
             </h1>
             <p class="muted">
               {props.reauth
@@ -183,6 +244,38 @@ export function LoginScreen(props: { reauth?: boolean; prefillServer?: string; p
               <span class="spinner" style={{ width: "16px", height: "16px" }} /> Connecting…
             </Show>
           </button>
+
+          {/* Quick Connect is Jellyfin's password-free sign-in. */}
+          <Show when={isJellyfin() && !props.reauth}>
+            <Show
+              when={qcCode()}
+              fallback={
+                <button
+                  type="button"
+                  class="login-advanced-toggle"
+                  onClick={() => void startQuickConnect()}
+                  disabled={busy()}
+                >
+                  <Icon name="link" size={14} />
+                  Use Quick Connect instead
+                </button>
+              }
+            >
+              <div class="login-quickconnect">
+                <p class="muted">
+                  In any signed-in Jellyfin app, open the user menu → Quick Connect and enter:
+                </p>
+                <div class="login-quickconnect-code">{qcCode()}</div>
+                <p class="muted">
+                  <span class="spinner" style={{ width: "13px", height: "13px" }} /> Waiting for
+                  approval…
+                </p>
+                <button type="button" class="login-advanced-toggle" onClick={stopQuickConnect}>
+                  Cancel
+                </button>
+              </div>
+            </Show>
+          </Show>
 
           {/* Advanced auth options are Navidrome/Subsonic-specific. */}
           <Show when={!isJellyfin()}>

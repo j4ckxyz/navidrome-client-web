@@ -17,10 +17,14 @@ const SUBSONIC_ENDPOINTS = [
 ];
 
 const JELLYFIN_ENDPOINTS = [
-  { endpoint: "System/Info", label: "System/Info" },
+  { endpoint: "System/Info/Public", label: "System/Info" },
+  { endpoint: "UserViews", label: "UserViews (libraries)" },
   { endpoint: "Artists/AlbumArtists", label: "AlbumArtists" },
   { endpoint: "Items", label: "Albums (newest)", params: { IncludeItemTypes: "MusicAlbum", Recursive: "true", SortBy: "DateCreated", SortOrder: "Descending", Limit: 5 } },
   { endpoint: "MusicGenres", label: "MusicGenres" },
+  // The playback negotiation that decides direct-play vs transcode. POST-only,
+  // so this GET just confirms the route exists — the useful part is Sessions.
+  { endpoint: "Sessions", label: "Sessions (this device)" },
 ];
 
 export function DebugPanel() {

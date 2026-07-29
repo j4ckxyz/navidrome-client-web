@@ -4,9 +4,18 @@
 import { A, useNavigate } from "@solidjs/router";
 import { createQuery } from "@tanstack/solid-query";
 import { createSignal, For, Show } from "solid-js";
-import { client, activeServerUrl, activeUsername, logout, isAdmin } from "~/auth/session";
+import {
+  client,
+  activeServerUrl,
+  activeUsername,
+  activeLibrary,
+  setActiveLibrary,
+  logout,
+  isAdmin,
+} from "~/auth/session";
 import { uploadEnabled } from "~/lib/serverConfig";
 import { qk, queryClient } from "~/lib/query";
+import { APP_NAME } from "~/lib/branding";
 import { Icon, type IconName } from "~/ui/Icon";
 import "./sidebar.css";
 
@@ -33,6 +42,21 @@ export function Sidebar(props: { onUpload?: () => void; onNavigate?: () => void 
     enabled: !!client(),
   }));
 
+  // Jellyfin accounts routinely have more than one music library ("Music",
+  // "Soundtracks", vinyl rips…). Subsonic has a single namespace and returns an
+  // empty list, so the picker only appears where it means something.
+  const libraries = createQuery(() => ({
+    queryKey: qk.libraries(),
+    queryFn: () => client()!.getLibraries(),
+    enabled: !!client(),
+  }));
+
+  function chooseLibrary(id: string) {
+    setActiveLibrary(id);
+    // Everything cached was scoped to the previous library.
+    queryClient.invalidateQueries();
+  }
+
   // Only show playlists you own — never other users' public ones. Navidrome's
   // getPlaylists returns every public playlist on the server, which is a privacy
   // surprise on a shared instance.
@@ -58,10 +82,24 @@ export function Sidebar(props: { onUpload?: () => void; onNavigate?: () => void 
         <span class="sidebar-logo">
           <Icon name="disc" size={22} />
         </span>
-        <span class="sidebar-brand-name">
-          {client()?.serverType === "jellyfin" ? "Jellyfin" : "Navidrome"}
-        </span>
+        <span class="sidebar-brand-name">{APP_NAME}</span>
       </A>
+
+      <Show when={(libraries.data?.length ?? 0) > 1}>
+        <label class="sidebar-library">
+          <span class="sr-only">Music library</span>
+          <select
+            class="input sidebar-library-select"
+            value={activeLibrary()}
+            onChange={(e) => chooseLibrary(e.currentTarget.value)}
+          >
+            <option value="">All libraries</option>
+            <For each={libraries.data}>
+              {(lib) => <option value={lib.id}>{lib.name}</option>}
+            </For>
+          </select>
+        </label>
+      </Show>
 
       <div class="sidebar-nav">
         <For each={NAV}>
