@@ -3,5 +3,10 @@
   "identifier": "default",
   "description": "Core Tonearm desktop window permissions",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "process:allow-restart",
+    "updater:default"
+  ]
 }

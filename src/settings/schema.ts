@@ -73,6 +73,7 @@ export type LandingPage =
 
 export type ReplayGainMode = "off" | "track" | "album";
 export type LogLevel = "silent" | "error" | "info" | "debug";
+export type AppIconVariant = "amber" | "ocean" | "violet" | "rose";
 
 // --- Equalizer -------------------------------------------------------------
 // A 10-band graphic equalizer applied via Web Audio peaking filters. The
@@ -164,6 +165,11 @@ export interface Settings {
 
   profile: {
     displayName: string; // overrides the server username in greetings; "" = use username
+  };
+
+  desktop: {
+    appIcon: AppIconVariant;
+    checkForUpdatesOnLaunch: boolean;
   };
 
   theme: {
@@ -541,6 +547,10 @@ export const DEFAULT_SETTINGS: Settings = {
   version: SETTINGS_VERSION,
   profile: {
     displayName: "",
+  },
+  desktop: {
+    appIcon: "ocean",
+    checkForUpdatesOnLaunch: true,
   },
   theme: {
     preset: "midnight",

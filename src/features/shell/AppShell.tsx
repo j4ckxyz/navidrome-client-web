@@ -2,7 +2,7 @@
 // bar, optional queue/lyrics side panel, and the persistent now-playing bar.
 // Also installs global keyboard shortcuts and the add-to-playlist dialog.
 
-import { createEffect, createSignal, type JSX, onMount, Show } from "solid-js";
+import { createEffect, createSignal, type JSX, onCleanup, onMount, Show } from "solid-js";
 import { useLocation, useNavigate } from "@solidjs/router";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
@@ -22,6 +22,8 @@ import { AddToPlaylistDialog } from "~/features/playlists/addToPlaylist";
 import { DownloadDialog } from "~/features/download/DownloadDialog";
 import { ShareToast } from "~/features/share/share";
 import { ShortcutsHelpDialog } from "./ShortcutsHelpDialog";
+import { DesktopUpdateNotice } from "~/features/settings/DesktopUpdateNotice";
+import { checkForDesktopUpdate } from "~/lib/desktopUpdater";
 import { UploadDialog } from "~/features/upload/UploadDialog";
 import { Icon } from "~/ui/Icon";
 import { settings, updateSettings } from "~/settings/store";
@@ -52,6 +54,14 @@ export function AppShell(props: { children?: JSX.Element }) {
       const target = LANDING_ROUTES[settings.layout.defaultLanding] ?? "/";
       if (target !== "/") navigate(target, { replace: true });
     }
+
+    const onNativeMenu = (event: Event) => {
+      const action = (event as CustomEvent<string>).detail;
+      if (action === "open-settings") navigate("/settings");
+      if (action === "check-updates") void checkForDesktopUpdate();
+    };
+    window.addEventListener("tonearm:native-shortcut", onNativeMenu);
+    onCleanup(() => window.removeEventListener("tonearm:native-shortcut", onNativeMenu));
   });
 
   // Close the mobile drawer whenever the route changes, so tapping a link inside
@@ -125,6 +135,7 @@ export function AppShell(props: { children?: JSX.Element }) {
       <AddToPlaylistDialog />
       <DownloadDialog />
       <ShareToast />
+      <DesktopUpdateNotice />
       <ShortcutsHelpDialog />
       <Show when={showUpload()}>
         <UploadDialog onClose={() => setShowUpload(false)} />

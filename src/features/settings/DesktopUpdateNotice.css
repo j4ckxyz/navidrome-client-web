@@ -1,0 +1,42 @@
+.desktop-update-notice {
+  position: fixed;
+  z-index: 12000;
+  right: 18px;
+  bottom: calc(var(--nowplaying-height) + 16px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(520px, calc(100vw - 36px));
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 28%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.desktop-update-notice > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 180px;
+}
+
+.desktop-update-notice > div > span {
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .desktop-update-notice {
+    right: 10px;
+    bottom: calc(var(--nowplaying-height) + 10px);
+    left: 10px;
+    flex-wrap: wrap;
+    max-width: none;
+  }
+
+  .desktop-update-notice > div {
+    flex-basis: 100%;
+  }
+}

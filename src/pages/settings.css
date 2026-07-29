@@ -162,6 +162,66 @@
   color: var(--danger);
 }
 
+.app-icon-picker {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(72px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.app-icon-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  min-height: 92px;
+  padding: 10px 8px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.app-icon-choice:hover {
+  background: var(--surface-hover);
+  color: var(--content-text);
+}
+
+.app-icon-choice-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--content-text);
+}
+
+.app-icon-choice img {
+  display: block;
+  border-radius: 13px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 22%);
+}
+
+.desktop-update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.desktop-update-linux {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.desktop-update-linux code {
+  align-self: flex-start;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--content-bg);
+  user-select: text;
+}
+
 /* Jellyfin connection card (Settings → Connections). */
 .jf-form {
   display: flex;

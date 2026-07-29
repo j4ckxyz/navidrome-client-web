@@ -24,13 +24,17 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "category": "Music",
     "shortDescription": "Fast Navidrome and Jellyfin music player",
     "longDescription": "Tonearm is a fast native desktop client for Navidrome and Jellyfin music libraries, with downloads for offline listening.",
     "publisher": "Tonearm contributors",
     "homepage": "https://github.com/j4ckxyz/navidrome-client-web",
     "copyright": "Copyright (c) Tonearm contributors",
-    "macOS": { "minimumSystemVersion": "15.0" },
+    "macOS": {
+      "minimumSystemVersion": "15.0",
+      "signingIdentity": "-"
+    },
     "linux": { "appimage": { "bundleMediaFramework": false } },
     "windows": {
       "webviewInstallMode": { "type": "embedBootstrapper", "silent": true },
@@ -41,5 +45,16 @@
       }
     },
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico", "icons/icon.icns"]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJEOEZDRjE2OUREOUJGNkYKUldSdnY5bWRGcytQTGJOeUVvZW1QMFE4RE42VDlLVXlDeDBOcnFkd0xRMjlmdTNFVnhHcS9pZkEK",
+      "endpoints": [
+        "https://github.com/j4ckxyz/navidrome-client-web/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

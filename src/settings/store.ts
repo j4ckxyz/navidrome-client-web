@@ -93,7 +93,7 @@ export function importSettings(json: string): ImportResult {
     return { ok: false, error: "Missing settings version — is this a settings export?" };
   }
   // Structural sanity check on the major sections.
-  for (const section of ["theme", "layout", "playback", "power"]) {
+  for (const section of ["profile", "desktop", "theme", "layout", "playback", "power"]) {
     if (obj[section] !== undefined && typeof obj[section] !== "object") {
       return { ok: false, error: `Invalid '${section}' section` };
     }

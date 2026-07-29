@@ -214,18 +214,24 @@ Tags matching `v*` trigger `.github/workflows/desktop-release.yml`, producing a
 universal (Apple Silicon + Intel) macOS 15+ DMG, Windows NSIS and MSI installers
 and a Linux AppImage on a public GitHub release. Publishing a release through
 GitHub's UI also triggers the same builds and attaches them to that release. The
-workflow can also be run manually with a release tag. Playback commands are exposed
-as native menu accelerators using Command on macOS and Control on Windows/Linux.
-The same track, album and playlist Download actions as the web app save music for
-offline listening. Desktop icons are generated from the existing web icon at build
-time, so native binary assets are not duplicated in the repository. Native builds
-also retain the platform window controls and use macOS Vibrancy or Windows 11 Mica
-behind the draggable title bar; unsupported compositors fall back to an opaque
-window without extra work.
+workflow can also be run manually with a release tag. Playback commands stay
+available in the native menu, while focus-aware WebView shortcuts avoid stealing
+standard text-editing keys. The same track, album and playlist Download actions as
+the web app save music for offline listening. Desktop icons are generated from the
+existing record mark at build time, with selectable colour variants for the
+running app. Native builds retain platform window controls, remember window
+geometry, and use macOS Vibrancy or Windows 11 Mica where supported. macOS also
+gets a full-width draggable titlebar and the conventional close-to-hide/Dock-reopen
+lifecycle; unsupported compositors fall back to an opaque window.
 
 See [docs/windows-release.md](docs/windows-release.md) for the Windows specifics:
 why the window effects have to stay best-effort, and how to enable Authenticode
 signing so Windows Security stops quarantining the installer.
+
+See [docs/native-desktop-audit.md](docs/native-desktop-audit.md) for the
+platform-expectation checklist, and
+[docs/desktop-updates.md](docs/desktop-updates.md) for updater signing and the
+Linux command-line flow.
 
 ## Out of scope
 

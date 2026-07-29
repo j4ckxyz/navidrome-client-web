@@ -73,9 +73,14 @@ jobs:
         run: |
           cargo install trusted-signing-cli --version 0.5.0 --locked
           bun run scripts/enable-windows-signing.ts
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # These sign Tauri's updater bundles on every platform. They are
+          # separate from optional Apple Developer ID / Windows Authenticode
+          # identity signing and are mandatory for in-app updates.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
           releaseName: Tonearm ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
@@ -85,6 +90,10 @@ jobs:
           # published release, the action simply attaches the new assets.
           releaseDraft: false
           prerelease: false
+          uploadUpdaterJson: true
+          # Prefer MSI when both Windows bundles exist. It is less likely than
+          # the unsigned self-extracting NSIS executable to trigger AV.
+          updaterJsonPreferNsis: false
           args: ${{ matrix.args }}
 
   # tauri-action creates the release as a draft and only un-drafts it from the

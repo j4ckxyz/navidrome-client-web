@@ -4,7 +4,7 @@
 import { createSignal, For, Show } from "solid-js";
 import { settings, updateSettings } from "~/settings/store";
 import { DEFAULT_SHORTCUTS, SHORTCUT_LABELS, type ShortcutAction } from "~/settings/schema";
-import { keyFromEvent } from "~/features/shell/shortcuts";
+import { keyFromEvent } from "~/features/shell/shortcutMatching";
 import { Icon } from "~/ui/Icon";
 import "./shortcuts-editor.css";
 

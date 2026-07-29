@@ -9,19 +9,13 @@ import { toggleStar } from "~/features/stars";
 import { requestSearchFocus } from "./searchFocus";
 import { setShowShortcuts } from "./ShortcutsHelpDialog";
 import type { ShortcutAction } from "~/settings/schema";
+import {
+  isTypingTarget,
+  keyFromEvent,
+  shortcutActionForEvent,
+} from "./shortcutMatching";
 
-// Normalize a keyboard event into a binding string like "Ctrl+ArrowRight".
-export function keyFromEvent(e: KeyboardEvent): string {
-  const parts: string[] = [];
-  if (e.ctrlKey) parts.push("Ctrl");
-  if (e.altKey) parts.push("Alt");
-  if (e.shiftKey) parts.push("Shift");
-  if (e.metaKey) parts.push("Meta");
-  let key = e.key;
-  if (key === " ") key = "Space";
-  parts.push(key);
-  return parts.join("+");
-}
+export { isTypingTarget, keyFromEvent, shortcutActionForEvent } from "./shortcutMatching";
 
 const ACTIONS: Record<ShortcutAction, () => void> = {
   playPause: () => player.togglePlay(),
@@ -45,35 +39,21 @@ const ACTIONS: Record<ShortcutAction, () => void> = {
   },
 };
 
-// Actions allowed even when focus is in a text field (none by default, but
-// focusSearch and playPause are commonly wanted; we keep it strict and only
-// allow nothing while typing to avoid surprises).
-function isTypingTarget(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el) return false;
-  const tag = el.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
-}
-
 export function installShortcuts(): void {
   const handler = (e: KeyboardEvent) => {
     if (isTypingTarget(e.target)) return;
     const combo = keyFromEvent(e);
-    
+
     if (combo === "?" || combo === "Shift+?") {
       e.preventDefault();
       setShowShortcuts((v) => !v);
       return;
     }
 
-    const bindings = settings.power.shortcuts;
-    for (const action of Object.keys(bindings) as ShortcutAction[]) {
-      if (bindings[action] === combo) {
-        e.preventDefault();
-        ACTIONS[action]();
-        return;
-      }
-    }
+    const action = shortcutActionForEvent(e, settings.power.shortcuts);
+    if (!action) return;
+    e.preventDefault();
+    ACTIONS[action]();
   };
   window.addEventListener("keydown", handler);
   onCleanup(() => window.removeEventListener("keydown", handler));

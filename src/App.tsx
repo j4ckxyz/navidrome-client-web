@@ -1,11 +1,15 @@
 // Top-level app: shows the login screen until there's an authenticated client,
 // otherwise mounts the router with the app shell as the persistent layout.
 
-import { lazy, Show } from "solid-js";
+import { createEffect, lazy, onMount, Show } from "solid-js";
 import { Route, Router } from "@solidjs/router";
 import { client, reauthRequired, activeServerUrl, activeUsername } from "~/auth/session";
 import { LoginScreen } from "~/auth/LoginScreen";
 import { AppShell } from "~/features/shell/AppShell";
+import { applyDesktopAppIcon, startDesktopWindowDrag } from "~/lib/desktopShell";
+import { isTauriDesktop } from "~/lib/runtime";
+import { settings } from "~/settings/store";
+import { checkForDesktopUpdate, canUseInAppUpdates } from "~/lib/desktopUpdater";
 
 const Home = lazy(() => import("~/pages/Home"));
 const Albums = lazy(() => import("~/pages/Albums"));
@@ -25,9 +29,24 @@ const Wrapped = lazy(() => import("~/pages/Wrapped"));
 const Stats = lazy(() => import("~/pages/Stats"));
 
 export function App() {
+  createEffect(() => {
+    const variant = settings.desktop.appIcon;
+    if (isTauriDesktop) void applyDesktopAppIcon(variant);
+  });
+
+  onMount(() => {
+    if (!canUseInAppUpdates() || !settings.desktop.checkForUpdatesOnLaunch) return;
+    window.setTimeout(() => void checkForDesktopUpdate({ quiet: true }), 2500);
+  });
+
   return (
     <>
-      <div class="native-titlebar" data-tauri-drag-region aria-hidden="true" />
+      <div
+        class="native-titlebar"
+        data-tauri-drag-region
+        aria-hidden="true"
+        onMouseDown={startDesktopWindowDrag}
+      />
       <Show
         when={client() && !reauthRequired()}
         fallback={

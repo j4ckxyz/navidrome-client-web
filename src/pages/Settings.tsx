@@ -14,6 +14,8 @@ import { isTauriDesktop } from "~/lib/runtime";
 import { activeUsername, isAdmin } from "~/auth/session";
 import { player } from "~/player/store";
 import { ThemeEditor } from "~/features/settings/ThemeEditor";
+import { DesktopAppearance } from "~/features/settings/DesktopAppearance";
+import { DesktopUpdates } from "~/features/settings/DesktopUpdates";
 import { EqualizerEditor } from "~/features/settings/EqualizerEditor";
 import { ShortcutsEditor } from "~/features/settings/ShortcutsEditor";
 import { Row, Toggle, SelectField, RangeField, TextField } from "~/features/settings/controls";
@@ -80,6 +82,9 @@ export default function Settings() {
           {/* Appearance */}
           <Show when={tab() === "appearance"}>
             <ThemeEditor />
+            <Show when={isTauriDesktop}>
+              <DesktopAppearance />
+            </Show>
           </Show>
 
           {/* Layout */}
@@ -310,6 +315,9 @@ export default function Settings() {
 
           {/* Advanced */}
           <Show when={tab() === "advanced"}>
+            <Show when={isTauriDesktop}>
+              <DesktopUpdates />
+            </Show>
             <ShortcutsEditor />
 
             <div class="settings-block">

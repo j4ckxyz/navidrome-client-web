@@ -1,14 +1,47 @@
 // Generates the PWA icon set into public/icons/ — run `bun run scripts/generate-icons.ts`
 // after changing the design. Pure-code rasterizer (no image deps): draws the
-// same mark as the favicon — a warm-amber rounded square with a dark record —
-// and encodes PNGs by hand using fflate's zlib.
+// same record mark as the favicon and encodes PNGs by hand using fflate's zlib.
+// Desktop users can choose a colour without changing the familiar symbol.
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { zlibSync } from "fflate";
 
-const BG = { r: 0xe6, g: 0xa1, b: 0x4c }; // accent amber
-const FG = { r: 0x1a, g: 0x14, b: 0x10 }; // near-black ink
+interface RGB {
+  r: number;
+  g: number;
+  b: number;
+}
+
+export type AppIconVariant = "amber" | "ocean" | "violet" | "rose";
+
+interface Palette {
+  bg: RGB;
+  fg: RGB;
+}
+
+const PALETTES: Record<AppIconVariant, Palette> = {
+  amber: {
+    bg: { r: 0xe6, g: 0xa1, b: 0x4c },
+    fg: { r: 0x1a, g: 0x14, b: 0x10 },
+  },
+  ocean: {
+    bg: { r: 0x42, g: 0xa5, b: 0xc7 },
+    fg: { r: 0x09, g: 0x22, b: 0x32 },
+  },
+  violet: {
+    bg: { r: 0x9a, g: 0x7d, b: 0xe8 },
+    fg: { r: 0x20, g: 0x13, b: 0x3c },
+  },
+  rose: {
+    bg: { r: 0xec, g: 0x70, b: 0x86 },
+    fg: { r: 0x35, g: 0x0e, b: 0x1c },
+  },
+};
+
+// The bundle/PWA icon is Ocean. Amber remains available in the picker for
+// anyone who prefers the original Tonearm colour.
+const DEFAULT_VARIANT: AppIconVariant = "ocean";
 
 // --- Tiny PNG encoder --------------------------------------------------------
 
@@ -82,11 +115,12 @@ function coverage(d: number): number {
 
 interface IconOpts {
   size: number;
+  palette: Palette;
   // Maskable icons need full-bleed background with the mark inside the 80% safe zone.
   fullBleed?: boolean;
 }
 
-function renderIcon({ size, fullBleed }: IconOpts): Uint8Array {
+function renderIcon({ size, palette, fullBleed }: IconOpts): Uint8Array {
   const rgba = new Uint8Array(size * size * 4);
   const half = size / 2;
   const cornerR = (size * 10) / 36;
@@ -114,9 +148,9 @@ function renderIcon({ size, fullBleed }: IconOpts): Uint8Array {
       fgA /= SS * SS;
       const i = (py * size + px) * 4;
       // Composite: ink over amber over transparent.
-      rgba[i] = FG.r * fgA + BG.r * (1 - fgA);
-      rgba[i + 1] = FG.g * fgA + BG.g * (1 - fgA);
-      rgba[i + 2] = FG.b * fgA + BG.b * (1 - fgA);
+      rgba[i] = palette.fg.r * fgA + palette.bg.r * (1 - fgA);
+      rgba[i + 1] = palette.fg.g * fgA + palette.bg.g * (1 - fgA);
+      rgba[i + 2] = palette.fg.b * fgA + palette.bg.b * (1 - fgA);
       rgba[i + 3] = Math.round(bgA * 255);
     }
   }
@@ -135,7 +169,18 @@ const targets: { file: string; size: number; fullBleed?: boolean }[] = [
 ];
 
 for (const t of targets) {
-  const png = encodePng(t.size, renderIcon(t));
+  const png = encodePng(
+    t.size,
+    renderIcon({ ...t, palette: PALETTES[DEFAULT_VARIANT] }),
+  );
   writeFileSync(join(outDir, t.file), png);
   console.log(`wrote public/icons/${t.file} (${png.length} bytes)`);
+}
+
+const desktopDir = join(outDir, "app-icons");
+mkdirSync(desktopDir, { recursive: true });
+for (const [name, palette] of Object.entries(PALETTES) as [AppIconVariant, Palette][]) {
+  const png = encodePng(512, renderIcon({ size: 512, palette }));
+  writeFileSync(join(desktopDir, `${name}.png`), png);
+  console.log(`wrote public/icons/app-icons/${name}.png (${png.length} bytes)`);
 }
