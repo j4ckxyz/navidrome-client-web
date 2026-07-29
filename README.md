@@ -21,6 +21,7 @@ There is **no database**, and in its simplest form **no backend** — the app is
 - **Gapless-ish playback, crossfade, and ReplayGain normalization** via the Web Audio API.
 - **Keyboard shortcuts** for playback and navigation — fully rebindable.
 - **Admin music upload** — when deployed alongside your server (see below), admins get an upload button that accepts audio files, whole folders, or a ZIP, writes them into the library, and triggers a scan. All embedded metadata is preserved.
+- **Update checking** — admins can see, from Settings, whether the deployment is behind the latest release, and (opt-in) update it in one click.
 - **A deep settings system** (see below).
 
 ### Jellyfin specifics
@@ -82,8 +83,40 @@ The Docker image is a small Bun server. Depending on how you configure it, it ru
 | `NAVIDROME_URL` | _(empty)_ | Target server to proxy to. **Empty = direct mode** (users enter their own URL). Set = proxy mode (no CORS). |
 | `MUSIC_DIR` | _(empty — uploads off)_ | Path **inside the container** where music lives. To enable the **admin upload** UI you must set this (e.g. `/music`), mount that path to the exact folder your Navidrome scans, **and** have `NAVIDROME_URL` set. Empty keeps uploads off. |
 | `PORT` | `8080` | Port the server listens on. |
+| `UPDATE_REPO` | `j4ckxyz/navidrome-client-web` | Repo the update check compares against. Change it if you run a fork. |
+| `UPDATE_BRANCH` | `main` | Branch the update check follows. |
+| `SELF_UPDATE` | _(off)_ | Set to `1` to let admins apply updates from the Settings page. Requires the extra mounts described below — **off by default**. |
+| `REPO_DIR` | `/repo` | Where the git checkout is mounted when `SELF_UPDATE` is on. |
+| `JELLYFIN_URL` | _(empty)_ | Jellyfin server used to verify that a caller is an admin. Only needed for `SELF_UPDATE` on a Jellyfin-backed deployment. |
 
 Uploads are **off by default** and gated three ways, so a public deployment can't be abused: the operator must explicitly set `MUSIC_DIR` + mount the matching folder, the request must come from a user the **proxied server confirms is an admin**, and direct mode disables the endpoint entirely.
+
+### Checking for updates
+
+Admins get an **Updates** card in Settings → Connections. It compares the commit this build was made from against the head of `UPDATE_BRANCH` on GitHub and tells you how far behind you are, with a link to the diff.
+
+Installing the update is a separate question, because the shipped container deliberately has no git checkout and no Docker socket:
+
+- **Default (recommended).** The card shows the one command to run in the folder you deployed from:
+
+  ```bash
+  bun run update
+  ```
+
+  That's the same updater the button would run — it inspects your existing Compose project, preserves your `docker-compose*.yml` and `.env`, pulls, and rebuilds in place.
+
+- **Opt-in one-click updates.** Set `SELF_UPDATE=1` and give the container what the updater needs — the checkout and the Docker socket:
+
+  ```yaml
+  environment:
+    SELF_UPDATE: "1"
+  volumes:
+    - .:/repo                                   # the git checkout, including .git
+    - /var/run/docker.sock:/var/run/docker.sock # lets it rebuild itself
+  ```
+
+  > **Understand what this trades away.** Mounting the Docker socket gives the container root-equivalent control of the Docker host. Only do this on a deployment you trust and don't expose publicly. The endpoint additionally requires a caller your server confirms is an admin, and refuses outright unless both mounts are actually present.
+
 
 ### Quick start
 

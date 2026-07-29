@@ -29,6 +29,11 @@ It has exactly **two modes**, decided by one variable:
 | `MUSIC_DIR` | _(empty — uploads off)_ | Path **inside the container**. Only matters in proxy mode. Set it (e.g. `/music`) **and** mount that path to the folder Navidrome scans to enable uploads. Empty keeps uploads off. |
 | `NAVIDROME_OG_USER` / `NAVIDROME_OG_PASS` | _(empty — previews off)_ | A **read-only** Navidrome account. Only matters in proxy mode. When both are set, shared links (`/album/:id`, `/playlist/:id`, `/artist/:id`) render rich OpenGraph/Twitter/Bluesky previews for crawlers. Empty keeps previews off. See [Link previews](#link-previews). |
 | `PORT` | `8080` | Listen port inside the container. |
+| `UPDATE_REPO` | `j4ckxyz/navidrome-client-web` | Repo the update check compares against. Point at your fork if you run one. |
+| `UPDATE_BRANCH` | `main` | Branch the update check follows. |
+| `SELF_UPDATE` | _(empty — off)_ | `1` lets admins apply updates from Settings. Needs the git checkout and the Docker socket mounted too; see [Updating](#updating). Off by default. |
+| `REPO_DIR` | `/repo` | Where the git checkout is mounted when `SELF_UPDATE` is on. |
+| `JELLYFIN_URL` | _(empty)_ | Jellyfin server used to confirm a caller is an admin. Only needed for `SELF_UPDATE` when Jellyfin is the backend. |
 
 The image exposes `8080`; the compose files map host `8680 → 8080`.
 
@@ -272,6 +277,53 @@ How it behaves:
 ---
 
 ## Updating
+
+### Checking from the app
+
+Admins see an **Updates** card in Settings → Connections. It asks the server for the
+commit this build was made from and compares it against the head of `UPDATE_BRANCH`
+on GitHub, showing how far behind you are and linking to the diff.
+
+The check is read-only and needs no configuration. It caches for 15 minutes and is
+single-flighted, so a busy instance can't burn through GitHub's unauthenticated rate
+limit.
+
+By default the card then shows you the command to run — the shipped container has no
+git checkout and no Docker socket, so it genuinely cannot rebuild itself.
+
+### One-click updates (opt-in)
+
+To let the button do it for you, give the container what the updater needs and turn
+the flag on:
+
+```yaml
+services:
+  tonearm:
+    environment:
+      SELF_UPDATE: "1"
+      # Only needed when Jellyfin is the backend — used to confirm the caller is
+      # a Jellyfin administrator before running anything.
+      JELLYFIN_URL: http://jellyfin:8096
+    volumes:
+      - .:/repo                                   # the checkout, including .git
+      - /var/run/docker.sock:/var/run/docker.sock # so it can rebuild itself
+```
+
+> **Weigh this up before enabling it.** Mounting the Docker socket gives the
+> container root-equivalent control of the Docker host — that is the price of a
+> container rebuilding itself, and it's why this is off by default. Enable it only on
+> a deployment you trust, and don't expose such an instance publicly.
+
+The endpoint is defended three ways regardless: it's inert unless `SELF_UPDATE` is
+set, it requires a caller your configured server confirms is an **admin**, and it
+refuses if the checkout or Docker aren't actually reachable. The command it runs is a
+fixed argv (`bun run scripts/update.ts`) with no shell and nothing from the request
+in it.
+
+Applying an update restarts the container, so the request is usually cut off
+mid-flight; the UI expects that and re-checks the version once it's back.
+
+### From the command line
 
 From a git checkout of this repo, run:
 

@@ -40,6 +40,20 @@ services:
       # crawlers. Humans still hit the login screen. Empty = previews off.
       NAVIDROME_OG_USER: ${NAVIDROME_OG_USER:-}
       NAVIDROME_OG_PASS: ${NAVIDROME_OG_PASS:-}
+
+      # --- One-click updates (optional, admin-only) ---
+      # Admins can always *check* for updates from Settings with no config. To
+      # let them install one from there too, set this to 1 AND uncomment both
+      # update volumes below. Mounting the Docker socket gives this container
+      # root-equivalent control of the Docker host — that is the cost of it
+      # rebuilding itself, and why this is off by default.
+      SELF_UPDATE: ${SELF_UPDATE:-}
+      # Only needed when Jellyfin is your backend: used to confirm the caller is
+      # a Jellyfin administrator before running anything.
+      JELLYFIN_URL: ${JELLYFIN_URL:-}
     # volumes:
     #   - ${MUSIC_HOST_DIR:-./music}:/music   # host music library : MUSIC_DIR
+    #   # --- required by SELF_UPDATE ---
+    #   - .:/repo                                    # this checkout, including .git
+    #   - /var/run/docker.sock:/var/run/docker.sock  # so it can rebuild itself
     restart: unless-stopped

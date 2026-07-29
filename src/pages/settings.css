@@ -229,3 +229,80 @@
   /* Long codec lists shouldn't stretch the settings panel. */
   overflow-wrap: anywhere;
 }
+
+/* Update check (Settings → Connections, admins only). */
+.update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.update-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.update-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+}
+.update-row code {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+.update-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.update-current {
+  color: var(--text-muted);
+}
+.update-available {
+  color: var(--accent);
+}
+.update-error {
+  color: var(--danger, #e5534b);
+}
+.update-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12.5px;
+  color: var(--accent);
+}
+.update-command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.update-command code {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--content-bg);
+  font-family: var(--font-mono, monospace);
+  font-size: 12.5px;
+  /* A long command shouldn't stretch the settings panel. */
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.update-log {
+  margin-top: 10px;
+  padding: 10px;
+  max-height: 220px;
+  overflow: auto;
+  border-radius: var(--radius);
+  background: var(--content-bg);
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}

@@ -22,6 +22,12 @@ RUN bun install --frozen-lockfile --production
 COPY server/ ./server/
 COPY --from=build /app/dist ./dist
 
+# The commit this image was built from. Exposed as an env var (not just a label)
+# so the running server can report its own version and tell the admin when a
+# newer one exists — `docker inspect` isn't reachable from inside the container.
+ARG COMMIT_HASH
+ENV COMMIT_HASH=${COMMIT_HASH}
+
 # NAVIDROME_URL  — set to your Navidrome server (e.g. http://navidrome:4533).
 #                 When set, the server proxies /rest/*, /auth/*, and /api/* to it.
 #                 When unset, the frontend asks the user for their server URL.
@@ -33,5 +39,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
 
 CMD ["bun", "run", "server/index.ts"]
 
-ARG COMMIT_HASH
+# Same value as the ENV above; the updater reads this label off the image to
+# decide whether the running container matches the checkout.
 LABEL org.opencontainers.image.revision=${COMMIT_HASH}
+LABEL org.opencontainers.image.title="Tonearm"
+LABEL org.opencontainers.image.description="Web client for Navidrome and Jellyfin music libraries"
