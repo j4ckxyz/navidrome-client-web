@@ -103,6 +103,9 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       caches.open(ART_CACHE).then(async (cache) => {
         const hit = await cache.match(req);
+        // A tagged URL names one specific image revision, so a hit can never be
+        // stale — skip the background refetch entirely.
+        if (hit && url.searchParams.has("tag")) return hit;
         const refresh = fetch(req)
           .then((res) => {
             if (res.ok || res.type === "opaque") {

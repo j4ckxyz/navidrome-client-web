@@ -7,6 +7,20 @@
 // those to the app's domain types (Song, Album, Artist…). A single client is
 // bound to one set of credentials; on a 401 it calls onAuthError so the UI can
 // prompt re-login.
+//
+// Playback is the part that has to be done Jellyfin's way rather than
+// Subsonic's. Two rules drive the code below:
+//
+//   1. Never guess a stream URL. POST /Items/{id}/PlaybackInfo with a real
+//      DeviceProfile and use what comes back. The response decides direct play
+//      vs transcode and issues the PlaySessionId that Jellyfin uses to key the
+//      ffmpeg job. Without one, the server can't recognise a follow-up range
+//      request as the *same* playback and spins up a second encode against the
+//      same output path — which is what makes a track warble, jump, or drift.
+//
+//   2. /Sessions/Playing/Stopped means "playback ended". It tears down the
+//      now-playing session, banks the play count, and writes the resume
+//      position. It is not a scrobble and must not be sent mid-track.
 
 import {
   ApiError,
@@ -22,12 +36,20 @@ import {
   type StructuredLyrics,
 } from "./types";
 import { jellyfinAuthHeader, type ServerCredentials } from "./credentials";
+import { buildDeviceProfile } from "./jellyfinProfile";
+import { canPlayContainer } from "~/lib/codecs";
 import type {
   AlbumListType,
   ClientOptions,
   LibraryStats,
+  LibraryView,
   MusicClient,
+  PlaybackEvent,
+  PlaybackReport,
+  PlaybackReportingStyle,
   ServerType,
+  StreamHandle,
+  StreamOptions,
 } from "./MusicClient";
 
 // Jellyfin's BaseItemDto, narrowed to the fields we read.
@@ -45,23 +67,62 @@ interface JfItem {
   IndexNumber?: number;
   ParentIndexNumber?: number;
   ProductionYear?: number;
+  PremiereDate?: string;
   Genres?: string[];
   RunTimeTicks?: number;
   DateCreated?: string;
   ChildCount?: number;
   AlbumCount?: number;
+  SongCount?: number;
   Container?: string;
   Path?: string;
   PlaylistItemId?: string;
+  CollectionType?: string;
   ImageTags?: { Primary?: string };
   AlbumPrimaryImageTag?: string;
-  MediaSources?: { Bitrate?: number; Size?: number; Container?: string }[];
+  MediaSources?: JfMediaSource[];
+  MediaStreams?: JfMediaStream[];
   UserData?: {
     IsFavorite?: boolean;
     PlayCount?: number;
     LastPlayedDate?: string;
     Played?: boolean;
+    Rating?: number;
+    Likes?: boolean;
   };
+}
+
+interface JfMediaStream {
+  Type?: string;
+  Codec?: string;
+  BitRate?: number;
+  SampleRate?: number;
+  BitDepth?: number;
+  Channels?: number;
+}
+
+interface JfMediaSource {
+  Id?: string;
+  Container?: string;
+  Size?: number;
+  Bitrate?: number;
+  Path?: string;
+  Protocol?: string;
+  RunTimeTicks?: number;
+  SupportsDirectPlay?: boolean;
+  SupportsDirectStream?: boolean;
+  SupportsTranscoding?: boolean;
+  TranscodingUrl?: string;
+  TranscodingContainer?: string;
+  TranscodingSubProtocol?: string;
+  MediaStreams?: JfMediaStream[];
+  IsInfiniteStream?: boolean;
+}
+
+interface JfPlaybackInfo {
+  MediaSources?: JfMediaSource[];
+  PlaySessionId?: string;
+  ErrorCode?: string;
 }
 
 interface JfList {
@@ -69,9 +130,15 @@ interface JfList {
   TotalRecordCount?: number;
 }
 
+const TICKS_PER_SECOND = 10_000_000;
+
 // 1 tick = 100ns → seconds.
 function ticksToSeconds(ticks?: number): number | undefined {
-  return ticks != null ? Math.round(ticks / 10_000_000) : undefined;
+  return ticks != null ? Math.round(ticks / TICKS_PER_SECOND) : undefined;
+}
+
+function secondsToTicks(seconds: number): number {
+  return Math.max(0, Math.round(seconds * TICKS_PER_SECOND));
 }
 
 // The item id whose Primary image should represent this item, or undefined when
@@ -82,6 +149,18 @@ function imageItemId(item: JfItem): string | undefined {
   return undefined;
 }
 
+// Image URLs get the image's content tag appended so they're immutable: the
+// browser (and our service worker) can cache them hard, and a re-tagged cover
+// busts the cache on its own. Without it every render re-hits Jellyfin's
+// resizer. Encoded into the id we hand the UI and split back out in
+// coverArtUrl, since the UI only carries a single string.
+function imageRef(item: JfItem): string | undefined {
+  const id = imageItemId(item);
+  if (!id) return undefined;
+  const tag = id === item.Id ? item.ImageTags?.Primary : item.AlbumPrimaryImageTag;
+  return tag ? `${id}|${tag}` : id;
+}
+
 function favMarker(item: JfItem): string | undefined {
   // The app treats `starred` as a truthy "is favourited" flag; Jellyfin has no
   // per-favourite timestamp, so use the last-played date if present else a
@@ -90,8 +169,22 @@ function favMarker(item: JfItem): string | undefined {
   return item.UserData.LastPlayedDate ?? "favorite";
 }
 
-const SONG_FIELDS = "Genres,MediaSources,Path,ParentIndexNumber";
-const ALBUM_FIELDS = "Genres,DateCreated,ChildCount";
+const SONG_FIELDS = "Genres,MediaSources,MediaStreams,Path,ParentIndexNumber,DateCreated";
+const ALBUM_FIELDS = "Genres,DateCreated,ChildCount,PremiereDate";
+
+// Read a query parameter without caring about case. Jellyfin emits PascalCase
+// names and binds them case-insensitively, so a case-sensitive lookup would
+// miss them and a case-sensitive *write* would silently duplicate them.
+function getParam(url: URL, lowerName: string): string | null {
+  for (const [k, v] of url.searchParams) {
+    if (k.toLowerCase() === lowerName) return v;
+  }
+  return null;
+}
+
+function repeatModeFor(repeat?: "off" | "all" | "one"): string {
+  return repeat === "all" ? "RepeatAll" : repeat === "one" ? "RepeatOne" : "RepeatNone";
+}
 
 export class JellyfinClient implements MusicClient {
   constructor(
@@ -100,9 +193,21 @@ export class JellyfinClient implements MusicClient {
   ) {}
 
   readonly serverType: ServerType = "jellyfin";
-  // Jellyfin has no server-side zip of a whole album/playlist.
+  // Jellyfin has no server-side zip endpoint, so collection downloads are
+  // assembled in the browser instead (features/download).
   readonly canDownloadCollections = false;
-  readonly canEditServerImages = false;
+  readonly canEditServerImages = true;
+  // Jellyfin playlists have no Subsonic-style public/private flag; sharing is
+  // done by granting other users access to the playlist item.
+  readonly canSetPlaylistVisibility = false;
+  // Jellyfin stores a like/dislike, not a 0–5 scale.
+  readonly hasFiveStarRatings = false;
+  // Jellyfin can transcode on demand, so lossy downloads work per track.
+  readonly canTranscodeDownloads = true;
+  readonly playbackReporting: PlaybackReportingStyle = "session";
+
+  // Restricts library reads to one Jellyfin music library. "" = every library.
+  private libraryId = "";
 
   get serverUrl(): string {
     return this.creds.serverUrl;
@@ -138,26 +243,33 @@ export class JellyfinClient implements MusicClient {
     return this.url(`/${endpoint.replace(/^\//, "")}`, params);
   }
 
+  // Synchronous best-effort URL. Used for downloads and as the last-resort
+  // fallback if negotiation fails — real playback goes through resolveStream.
   streamUrl(id: string, maxBitRate?: number, format?: string): string {
-    // Original codec, no cap → hand back the static file the browser plays
-    // directly. Otherwise transcode to a progressive MP3 stream that any
-    // <audio> element can consume (avoids HLS).
     if (!format && !maxBitRate) {
-      return this.url(`/Audio/${id}/stream`, { static: "true", deviceId: this.deviceId });
+      return this.url(`/Audio/${id}/stream`, {
+        static: "true",
+        deviceId: this.deviceId,
+        mediaSourceId: id,
+      });
     }
-    return this.url(`/Audio/${id}/stream.mp3`, {
+    return this.url(`/Audio/${id}/stream.${format ?? "mp3"}`, {
       deviceId: this.deviceId,
-      audioCodec: "mp3",
+      audioCodec: format ?? "mp3",
       audioBitRate: maxBitRate ? maxBitRate * 1000 : undefined,
+      mediaSourceId: id,
     });
   }
 
-  coverArtUrl(id: string | undefined, size?: number): string {
-    if (!id) return "";
+  coverArtUrl(ref: string | undefined, size?: number): string {
+    if (!ref) return "";
+    // `ref` may carry the image tag (see imageRef) so the URL is immutable.
+    const [id, tag] = ref.split("|");
     return this.url(`/Items/${id}/Images/Primary`, {
       fillWidth: size || undefined,
       fillHeight: size || undefined,
       quality: 90,
+      tag,
     });
   }
 
@@ -171,7 +283,13 @@ export class JellyfinClient implements MusicClient {
   private async request<T>(
     method: string,
     path: string,
-    opts: { params?: Record<string, string | number | undefined>; body?: unknown } = {},
+    opts: {
+      params?: Record<string, string | number | undefined>;
+      body?: unknown;
+      // Let the request outlive the page (used for the final stop report so
+      // closing the tab still ends the Jellyfin session).
+      keepalive?: boolean;
+    } = {},
   ): Promise<T> {
     const u = new URL(`${this.creds.serverUrl}${path}`);
     for (const [k, v] of Object.entries(opts.params ?? {})) {
@@ -179,6 +297,7 @@ export class JellyfinClient implements MusicClient {
     }
     const headers: Record<string, string> = {
       "X-Emby-Token": this.token,
+      Authorization: jellyfinAuthHeader(this.deviceId, this.token),
       "X-Emby-Authorization": jellyfinAuthHeader(this.deviceId, this.token),
     };
     if (opts.body !== undefined) headers["Content-Type"] = "application/json";
@@ -189,6 +308,7 @@ export class JellyfinClient implements MusicClient {
         method,
         headers,
         body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+        keepalive: opts.keepalive,
       });
     } catch {
       throw new ApiError(`Network error calling ${path}`);
@@ -207,10 +327,24 @@ export class JellyfinClient implements MusicClient {
     return this.request<T>("GET", path, { params });
   }
 
+  // Every /Items query is scoped to the selected music library (when one is
+  // chosen) and to this user.
+  private itemParams(
+    extra: Record<string, string | number | undefined> = {},
+  ): Record<string, string | number | undefined> {
+    return {
+      userId: this.userId,
+      ...(this.libraryId ? { ParentId: this.libraryId } : {}),
+      ...extra,
+    };
+  }
+
   // --- Mappers ----------------------------------------------------------------
 
   private toSong(item: JfItem): Song {
     const source = item.MediaSources?.[0];
+    const audio =
+      (item.MediaStreams ?? source?.MediaStreams ?? []).find((s) => s.Type === "Audio") ?? undefined;
     return {
       id: item.Id,
       title: item.Name,
@@ -222,16 +356,25 @@ export class JellyfinClient implements MusicClient {
       discNumber: item.ParentIndexNumber,
       year: item.ProductionYear,
       genre: item.Genres?.[0],
-      coverArt: imageItemId(item),
+      coverArt: imageRef(item),
       size: source?.Size,
       contentType: undefined,
       suffix: (item.Container ?? source?.Container)?.split(",")[0],
+      codec: audio?.Codec,
+      sampleRate: audio?.SampleRate,
+      bitDepth: audio?.BitDepth,
+      channels: audio?.Channels,
       duration: ticksToSeconds(item.RunTimeTicks),
-      bitRate: source?.Bitrate ? Math.round(source.Bitrate / 1000) : undefined,
+      bitRate: source?.Bitrate
+        ? Math.round(source.Bitrate / 1000)
+        : audio?.BitRate
+          ? Math.round(audio.BitRate / 1000)
+          : undefined,
       path: item.Path,
       starred: favMarker(item),
       playCount: item.UserData?.PlayCount,
       played: item.UserData?.LastPlayedDate,
+      created: item.DateCreated,
     };
   }
 
@@ -241,10 +384,10 @@ export class JellyfinClient implements MusicClient {
       name: item.Name,
       artist: item.AlbumArtist ?? item.AlbumArtists?.[0]?.Name,
       artistId: item.AlbumArtists?.[0]?.Id,
-      coverArt: imageItemId(item),
+      coverArt: imageRef(item),
       songCount: item.ChildCount,
       duration: ticksToSeconds(item.RunTimeTicks),
-      year: item.ProductionYear,
+      year: item.ProductionYear ?? (item.PremiereDate ? new Date(item.PremiereDate).getFullYear() : undefined),
       genre: item.Genres?.[0],
       starred: favMarker(item),
       created: item.DateCreated,
@@ -257,7 +400,7 @@ export class JellyfinClient implements MusicClient {
     return {
       id: item.Id,
       name: item.Name,
-      coverArt: imageItemId(item),
+      coverArt: imageRef(item),
       albumCount: item.AlbumCount,
       starred: favMarker(item),
     };
@@ -266,8 +409,265 @@ export class JellyfinClient implements MusicClient {
   // --- Connectivity -----------------------------------------------------------
 
   async ping(): Promise<boolean> {
-    await this.get("/System/Info");
+    await this.get("/System/Info/Public");
     return true;
+  }
+
+  async getServerInfo(): Promise<{ name?: string; version?: string } | null> {
+    try {
+      const info = await this.get<{ ServerName?: string; Version?: string }>("/System/Info/Public");
+      return { name: info.ServerName, version: info.Version };
+    } catch {
+      return null;
+    }
+  }
+
+  // Invalidate the access token server-side so signing out actually removes the
+  // device from Jellyfin's Dashboard → Devices rather than leaving a live token.
+  async revokeSession(): Promise<void> {
+    try {
+      await this.request("POST", "/Sessions/Logout");
+    } catch {
+      // Best effort — the local credentials are cleared regardless.
+    }
+  }
+
+  // --- Libraries --------------------------------------------------------------
+
+  // Music libraries this user can see. Jellyfin users often have several; the
+  // Subsonic API has no equivalent so the UI only surfaces this for Jellyfin.
+  async getLibraries(): Promise<LibraryView[]> {
+    try {
+      const data = await this.get<JfList>("/UserViews", { userId: this.userId });
+      return (data.Items ?? [])
+        .filter((v) => v.CollectionType === "music")
+        .map((v) => ({ id: v.Id, name: v.Name }));
+    } catch {
+      return [];
+    }
+  }
+
+  setLibrary(id: string): void {
+    this.libraryId = id;
+  }
+
+  // --- Playback: stream negotiation -------------------------------------------
+
+  // Ask Jellyfin how this track should be delivered, and to whom.
+  //
+  // The response tells us three things we can't safely guess: whether the
+  // browser can take the file untouched, the exact transcode URL to use if not,
+  // and the PlaySessionId that keys the server-side job. Reporting that id on
+  // every subsequent call is what lets Jellyfin reuse one encode for the whole
+  // track instead of starting a fresh one per HTTP range request.
+  async resolveStream(id: string, opts: StreamOptions = {}): Promise<StreamHandle> {
+    const startSeconds = Math.max(0, opts.startSeconds ?? 0);
+    const startTicks = secondsToTicks(startSeconds);
+    const profile = buildDeviceProfile({
+      maxBitRateKbps: opts.maxBitRateKbps,
+      forceTranscode: opts.forceTranscode,
+    });
+
+    let info: JfPlaybackInfo | null = null;
+    try {
+      info = await this.request<JfPlaybackInfo>("POST", `/Items/${id}/PlaybackInfo`, {
+        params: { userId: this.userId },
+        body: {
+          UserId: this.userId,
+          DeviceProfile: profile,
+          MaxStreamingBitrate: profile.MaxStreamingBitrate,
+          StartTimeTicks: startTicks,
+          EnableDirectPlay: !opts.forceTranscode,
+          EnableDirectStream: !opts.forceTranscode,
+          EnableTranscoding: true,
+          AllowAudioStreamCopy: true,
+          AllowVideoStreamCopy: false,
+          AutoOpenLiveStream: false,
+        },
+      });
+    } catch {
+      // Server too old, or the endpoint refused: fall through to /universal,
+      // which performs the same negotiation server-side in a single GET.
+    }
+
+    const source = info?.MediaSources?.[0];
+    const playSessionId = info?.PlaySessionId;
+
+    if (source) {
+      const duration = ticksToSeconds(source.RunTimeTicks);
+      const directPlay = source.SupportsDirectPlay || source.SupportsDirectStream;
+
+      // Direct play only if the browser genuinely handles the container. The
+      // server matched our profile, but a source with an odd codec inside a
+      // familiar container can still slip through.
+      const audio = (source.MediaStreams ?? []).find((s) => s.Type === "Audio");
+      if (directPlay && canPlayContainer(source.Container, audio?.Codec)) {
+        return {
+          url: this.url(`/Audio/${id}/stream`, {
+            static: "true",
+            mediaSourceId: source.Id ?? id,
+            playSessionId,
+            deviceId: this.deviceId,
+            // A static response is a plain file: byte ranges land exactly where
+            // the browser expects, so the element can seek by itself and we
+            // never need a server-side offset.
+          }),
+          playSessionId,
+          mediaSourceId: source.Id ?? id,
+          playMethod: source.SupportsDirectPlay ? "DirectPlay" : "DirectStream",
+          canSeek: true,
+          startOffset: 0,
+          duration,
+        };
+      }
+
+      if (source.TranscodingUrl) {
+        // Jellyfin hands back a fully-formed relative URL that already carries
+        // its own PlaySessionId, ApiKey and encoder settings. Use it verbatim
+        // rather than rebuilding it — that URL *is* the negotiated result.
+        // Jellyfin spells its parameters in PascalCase and binds them
+        // case-insensitively, so match that way or we'd add duplicates that bind
+        // as arrays and break the request.
+        const url = new URL(`${this.creds.serverUrl}${source.TranscodingUrl}`);
+        if (!getParam(url, "apikey") && !getParam(url, "api_key")) {
+          url.searchParams.set("api_key", this.token);
+        }
+        // The offset is already baked in — we asked for it in PlaybackInfo.
+        if (startTicks > 0 && !getParam(url, "starttimeticks")) {
+          url.searchParams.set("StartTimeTicks", String(startTicks));
+        }
+        return {
+          url: url.toString(),
+          playSessionId: getParam(url, "playsessionid") ?? playSessionId,
+          mediaSourceId: source.Id ?? id,
+          playMethod: "Transcode",
+          // A live encode has no stable byte↔time mapping. Seeking is done by
+          // re-requesting from a new startTimeTicks, not by moving currentTime.
+          canSeek: false,
+          startOffset: startSeconds,
+          duration,
+        };
+      }
+    }
+
+    // Fallback: the universal endpoint runs the same profile matching on the
+    // server and returns either the original file or a transcode.
+    return {
+      url: this.universalUrl(id, opts, startTicks),
+      playSessionId,
+      mediaSourceId: id,
+      playMethod: undefined,
+      // Unknown delivery method — assume the pessimistic case so seeking uses
+      // the server-side offset path rather than producing garbage.
+      canSeek: false,
+      startOffset: startSeconds,
+      duration: undefined,
+    };
+  }
+
+  private universalUrl(id: string, opts: StreamOptions, startTicks: number): string {
+    const profile = buildDeviceProfile({
+      maxBitRateKbps: opts.maxBitRateKbps,
+      forceTranscode: opts.forceTranscode,
+    });
+    const transcode = profile.TranscodingProfiles[0];
+    return this.url(`/Audio/${id}/universal`, {
+      userId: this.userId,
+      deviceId: this.deviceId,
+      container: profile.DirectPlayProfiles.map((p) =>
+        p.AudioCodec ? `${p.Container}|${p.AudioCodec}` : p.Container,
+      ).join(","),
+      audioCodec: transcode.AudioCodec,
+      transcodingContainer: transcode.Container,
+      transcodingProtocol: "http",
+      maxStreamingBitrate: profile.MaxStreamingBitrate,
+      startTimeTicks: startTicks || undefined,
+      enableRedirection: "true",
+      enableRemoteMedia: "false",
+    });
+  }
+
+  // --- Playback: session reporting --------------------------------------------
+
+  // Jellyfin's playback lifecycle. Getting this right is what makes play counts
+  // increment, "Now Playing" appear on the dashboard, resume positions stick,
+  // and the server release its encoder when we're done with a track.
+  async reportPlayback(event: PlaybackEvent, report: PlaybackReport): Promise<void> {
+    const body: Record<string, unknown> = {
+      ItemId: report.songId,
+      MediaSourceId: report.stream?.mediaSourceId ?? report.songId,
+      PlaySessionId: report.stream?.playSessionId,
+      PositionTicks: secondsToTicks(report.positionSeconds),
+      PlayMethod: report.stream?.playMethod ?? "DirectPlay",
+      // A transcode can't be scrubbed in place, but we *can* restart it at a new
+      // offset — from a remote's point of view the track is still seekable.
+      CanSeek: true,
+      IsPaused: event === "pause" ? true : (report.isPaused ?? false),
+      IsMuted: report.isMuted ?? false,
+      VolumeLevel: Math.round((report.volume ?? 1) * 100),
+      RepeatMode: repeatModeFor(report.repeat),
+      PlaybackOrder: report.shuffle ? "Shuffle" : "Default",
+    };
+    if (report.queue?.length) {
+      body.NowPlayingQueue = report.queue.map((q, i) => ({
+        Id: q.id,
+        PlaylistItemId: q.playlistItemId ?? `playlistItem${i}`,
+      }));
+    }
+
+    const path =
+      event === "start"
+        ? "/Sessions/Playing"
+        : event === "stop"
+          ? "/Sessions/Playing/Stopped"
+          : "/Sessions/Playing/Progress";
+
+    try {
+      await this.request("POST", path, { body, keepalive: event === "stop" });
+    } catch {
+      // Reporting is telemetry, never a reason to interrupt playback.
+    }
+  }
+
+  // Register what this client can do, so Jellyfin lists it as a controllable
+  // device ("Play On" / remote control from the Jellyfin app or dashboard).
+  async registerCapabilities(): Promise<void> {
+    try {
+      await this.request("POST", "/Sessions/Capabilities/Full", {
+        body: {
+          PlayableMediaTypes: ["Audio"],
+          SupportedCommands: [
+            "PlayState",
+            "Play",
+            "PlayNext",
+            "VolumeUp",
+            "VolumeDown",
+            "SetVolume",
+            "Mute",
+            "Unmute",
+            "ToggleMute",
+            "SetRepeatMode",
+            "SetShuffleQueue",
+            // Only list what jellyfinRemote actually acts on — advertising a
+            // command we ignore makes a remote's request vanish silently.
+          ],
+          SupportsMediaControl: true,
+          SupportsPersistentIdentifier: true,
+          DeviceProfile: buildDeviceProfile(),
+        },
+      });
+    } catch {
+      // Older server or restricted user — remote control simply won't appear.
+    }
+  }
+
+  // WebSocket URL for the remote-control channel (see player/jellyfinRemote).
+  remoteControlUrl(): string {
+    const base = this.creds.serverUrl.replace(/^http/i, "ws");
+    const u = new URL(`${base}/socket`);
+    u.searchParams.set("api_key", this.token);
+    u.searchParams.set("deviceId", this.deviceId);
+    return u.toString();
   }
 
   // --- Library: artists -------------------------------------------------------
@@ -275,6 +675,7 @@ export class JellyfinClient implements MusicClient {
   async getArtists(): Promise<ArtistSummary[]> {
     const data = await this.get<JfList>("/Artists/AlbumArtists", {
       userId: this.userId,
+      ...(this.libraryId ? { ParentId: this.libraryId } : {}),
       SortBy: "SortName",
       SortOrder: "Ascending",
     });
@@ -283,15 +684,17 @@ export class JellyfinClient implements MusicClient {
 
   async getArtist(id: string): Promise<Artist> {
     const item = await this.get<JfItem>(`/Items/${id}`, { userId: this.userId });
-    const albumsData = await this.get<JfList>("/Items", {
-      userId: this.userId,
-      AlbumArtistIds: id,
-      IncludeItemTypes: "MusicAlbum",
-      Recursive: "true",
-      SortBy: "ProductionYear,PremiereDate,SortName",
-      SortOrder: "Descending",
-      Fields: ALBUM_FIELDS,
-    });
+    const albumsData = await this.get<JfList>(
+      "/Items",
+      this.itemParams({
+        AlbumArtistIds: id,
+        IncludeItemTypes: "MusicAlbum",
+        Recursive: "true",
+        SortBy: "ProductionYear,PremiereDate,SortName",
+        SortOrder: "Descending",
+        Fields: ALBUM_FIELDS,
+      }),
+    );
     return {
       ...this.toArtist(item),
       biography: item.Overview,
@@ -337,14 +740,13 @@ export class JellyfinClient implements MusicClient {
     type: AlbumListType,
     opts: { size?: number; offset?: number; genre?: string; fromYear?: number; toYear?: number } = {},
   ): Promise<Album[]> {
-    const params: Record<string, string | number | undefined> = {
-      userId: this.userId,
+    const params = this.itemParams({
       IncludeItemTypes: "MusicAlbum",
       Recursive: "true",
       Limit: opts.size ?? 50,
       StartIndex: opts.offset ?? 0,
       Fields: ALBUM_FIELDS,
-    };
+    });
 
     switch (type) {
       case "newest":
@@ -359,6 +761,7 @@ export class JellyfinClient implements MusicClient {
       case "frequent":
         params.SortBy = "PlayCount,SortName";
         params.SortOrder = "Descending";
+        params.Filters = "IsPlayed";
         break;
       case "random":
         params.SortBy = "Random";
@@ -409,38 +812,58 @@ export class JellyfinClient implements MusicClient {
   }
 
   async getRandomSongs(size = 50, genre?: string): Promise<Song[]> {
-    const data = await this.get<JfList>("/Items", {
-      userId: this.userId,
-      IncludeItemTypes: "Audio",
-      Recursive: "true",
-      SortBy: "Random",
-      Limit: size,
-      Genres: genre,
-      Fields: SONG_FIELDS,
-    });
+    const data = await this.get<JfList>(
+      "/Items",
+      this.itemParams({
+        IncludeItemTypes: "Audio",
+        Recursive: "true",
+        SortBy: "Random",
+        Limit: size,
+        Genres: genre,
+        Fields: SONG_FIELDS,
+      }),
+    );
     return (data.Items ?? []).map((s) => this.toSong(s));
   }
 
   async getTopSongs(artist: string, count = 50): Promise<Song[]> {
     // Subsonic keys this on the artist *name*; Jellyfin's Artists filter does too.
-    const data = await this.get<JfList>("/Items", {
-      userId: this.userId,
-      IncludeItemTypes: "Audio",
-      Recursive: "true",
-      Artists: artist,
-      SortBy: "PlayCount,SortName",
-      SortOrder: "Descending",
-      Limit: count,
-      Fields: SONG_FIELDS,
-    });
+    const data = await this.get<JfList>(
+      "/Items",
+      this.itemParams({
+        IncludeItemTypes: "Audio",
+        Recursive: "true",
+        Artists: artist,
+        SortBy: "PlayCount,SortName",
+        SortOrder: "Descending",
+        Limit: count,
+        Fields: SONG_FIELDS,
+      }),
+    );
     return (data.Items ?? []).map((s) => this.toSong(s));
   }
 
   async getSimilarSongs(id: string, count = 50): Promise<Song[]> {
-    // InstantMix is Jellyfin's "radio from this track" — the closest match to
-    // Subsonic's similar-songs discovery.
+    return this.getInstantMix(id, "song", count);
+  }
+
+  // Jellyfin's InstantMix is its radio generator, and it takes a seed of any
+  // kind. Genres are seeded by name rather than id.
+  async getInstantMix(
+    id: string,
+    kind: "song" | "album" | "artist" | "genre" = "song",
+    count = 50,
+  ): Promise<Song[]> {
+    const path =
+      kind === "genre"
+        ? `/MusicGenres/${encodeURIComponent(id)}/InstantMix`
+        : kind === "artist"
+          ? `/Artists/${id}/InstantMix`
+          : kind === "album"
+            ? `/Albums/${id}/InstantMix`
+            : `/Items/${id}/InstantMix`;
     try {
-      const data = await this.get<JfList>(`/Items/${id}/InstantMix`, {
+      const data = await this.get<JfList>(path, {
         userId: this.userId,
         Limit: count,
         Fields: SONG_FIELDS,
@@ -450,6 +873,7 @@ export class JellyfinClient implements MusicClient {
     } catch {
       // fall through
     }
+    if (kind !== "song") return [];
     try {
       const data = await this.get<JfList>(`/Items/${id}/Similar`, {
         userId: this.userId,
@@ -467,23 +891,32 @@ export class JellyfinClient implements MusicClient {
   async getGenres(): Promise<Genre[]> {
     const data = await this.get<JfList>("/MusicGenres", {
       userId: this.userId,
+      ...(this.libraryId ? { ParentId: this.libraryId } : {}),
       SortBy: "SortName",
+      Fields: "ItemCounts",
     });
-    // Jellyfin doesn't return per-genre counts cheaply; leave them at 0.
-    return (data.Items ?? []).map((g) => ({ value: g.Name, songCount: 0, albumCount: 0 }));
+    // ItemCounts fills SongCount/AlbumCount where the server supports it; older
+    // servers omit them and the UI falls back to hiding the count.
+    return (data.Items ?? []).map((g) => ({
+      value: g.Name,
+      songCount: g.SongCount ?? 0,
+      albumCount: g.AlbumCount ?? g.ChildCount ?? 0,
+    }));
   }
 
   async getSongsByGenre(genre: string, count = 100, offset = 0): Promise<Song[]> {
-    const data = await this.get<JfList>("/Items", {
-      userId: this.userId,
-      IncludeItemTypes: "Audio",
-      Recursive: "true",
-      Genres: genre,
-      SortBy: "Album,ParentIndexNumber,IndexNumber",
-      Limit: count,
-      StartIndex: offset,
-      Fields: SONG_FIELDS,
-    });
+    const data = await this.get<JfList>(
+      "/Items",
+      this.itemParams({
+        IncludeItemTypes: "Audio",
+        Recursive: "true",
+        Genres: genre,
+        SortBy: "Album,ParentIndexNumber,IndexNumber",
+        Limit: count,
+        StartIndex: offset,
+        Fields: SONG_FIELDS,
+      }),
+    );
     return (data.Items ?? []).map((s) => this.toSong(s));
   }
 
@@ -491,13 +924,15 @@ export class JellyfinClient implements MusicClient {
 
   async getLibraryStats(): Promise<LibraryStats> {
     const count = async (params: Record<string, string | number>) => {
-      const data = await this.get<JfList>("/Items", {
-        userId: this.userId,
-        Recursive: "true",
-        Limit: 0,
-        EnableTotalRecordCount: "true",
-        ...params,
-      });
+      const data = await this.get<JfList>(
+        "/Items",
+        this.itemParams({
+          Recursive: "true",
+          Limit: 0,
+          EnableTotalRecordCount: "true",
+          ...params,
+        }),
+      );
       return data.TotalRecordCount ?? 0;
     };
     const [albumCount, songCount, artistsData] = await Promise.all([
@@ -505,6 +940,7 @@ export class JellyfinClient implements MusicClient {
       count({ IncludeItemTypes: "Audio" }),
       this.get<JfList>("/Artists/AlbumArtists", {
         userId: this.userId,
+        ...(this.libraryId ? { ParentId: this.libraryId } : {}),
         Limit: 0,
         EnableTotalRecordCount: "true",
       }),
@@ -513,6 +949,8 @@ export class JellyfinClient implements MusicClient {
       artistCount: artistsData.TotalRecordCount ?? 0,
       albumCount,
       songCount,
+      // Summing every track's file size would mean pulling MediaSources for the
+      // whole library; not worth the request storm for one stat.
       totalSize: undefined,
     };
   }
@@ -521,24 +959,29 @@ export class JellyfinClient implements MusicClient {
 
   async getStarred(): Promise<{ artist: ArtistSummary[]; album: Album[]; song: Song[] }> {
     const [songs, albums, artists] = await Promise.all([
-      this.get<JfList>("/Items", {
-        userId: this.userId,
-        IncludeItemTypes: "Audio",
-        Recursive: "true",
-        Filters: "IsFavorite",
-        SortBy: "SortName",
-        Fields: SONG_FIELDS,
-      }),
-      this.get<JfList>("/Items", {
-        userId: this.userId,
-        IncludeItemTypes: "MusicAlbum",
-        Recursive: "true",
-        Filters: "IsFavorite",
-        SortBy: "SortName",
-        Fields: ALBUM_FIELDS,
-      }),
+      this.get<JfList>(
+        "/Items",
+        this.itemParams({
+          IncludeItemTypes: "Audio",
+          Recursive: "true",
+          Filters: "IsFavorite",
+          SortBy: "SortName",
+          Fields: SONG_FIELDS,
+        }),
+      ),
+      this.get<JfList>(
+        "/Items",
+        this.itemParams({
+          IncludeItemTypes: "MusicAlbum",
+          Recursive: "true",
+          Filters: "IsFavorite",
+          SortBy: "SortName",
+          Fields: ALBUM_FIELDS,
+        }),
+      ),
       this.get<JfList>("/Artists/AlbumArtists", {
         userId: this.userId,
+        ...(this.libraryId ? { ParentId: this.libraryId } : {}),
         Filters: "IsFavorite",
         SortBy: "SortName",
       }),
@@ -554,12 +997,37 @@ export class JellyfinClient implements MusicClient {
     };
   }
 
+  // Jellyfin 10.10 moved the per-user write endpoints off the /Users/{id}
+  // prefix. Try the current route, fall back to the legacy one so 10.8/10.9
+  // servers keep working.
+  private async userItemWrite(
+    method: string,
+    modern: string,
+    legacy: string,
+    params: Record<string, string | number | undefined> = {},
+  ): Promise<void> {
+    try {
+      await this.request(method, modern, { params: { userId: this.userId, ...params } });
+    } catch (err) {
+      if (err instanceof ApiError && err.isAuthError) throw err;
+      await this.request(method, legacy, { params });
+    }
+  }
+
   async star(id: string): Promise<void> {
-    await this.request("POST", `/Users/${this.userId}/FavoriteItems/${id}`);
+    await this.userItemWrite(
+      "POST",
+      `/UserFavoriteItems/${id}`,
+      `/Users/${this.userId}/FavoriteItems/${id}`,
+    );
   }
 
   async unstar(id: string): Promise<void> {
-    await this.request("DELETE", `/Users/${this.userId}/FavoriteItems/${id}`);
+    await this.userItemWrite(
+      "DELETE",
+      `/UserFavoriteItems/${id}`,
+      `/Users/${this.userId}/FavoriteItems/${id}`,
+    );
   }
 
   async setRating(id: string, rating: number): Promise<void> {
@@ -567,11 +1035,18 @@ export class JellyfinClient implements MusicClient {
     // "like" and 0 to clearing it. Best-effort — never surfaces an error.
     try {
       if (rating > 0) {
-        await this.request("POST", `/Users/${this.userId}/Items/${id}/Rating`, {
-          params: { Likes: "true" },
-        });
+        await this.userItemWrite(
+          "POST",
+          `/UserItems/${id}/Rating`,
+          `/Users/${this.userId}/Items/${id}/Rating`,
+          { Likes: "true" },
+        );
       } else {
-        await this.request("DELETE", `/Users/${this.userId}/Items/${id}/Rating`);
+        await this.userItemWrite(
+          "DELETE",
+          `/UserItems/${id}/Rating`,
+          `/Users/${this.userId}/Items/${id}/Rating`,
+        );
       }
     } catch {
       // ignore
@@ -580,16 +1055,13 @@ export class JellyfinClient implements MusicClient {
 
   // --- Scrobbling -------------------------------------------------------------
 
+  // Kept for interface compatibility. Jellyfin's play counts come from the
+  // session lifecycle (reportPlayback), so a Subsonic-style mid-track
+  // "submission" must not be translated into /Sessions/Playing/Stopped — doing
+  // that ends the session, drops Now Playing, and banks a bogus resume point.
   async scrobble(id: string, submission: boolean, time?: number): Promise<void> {
-    if (!submission) {
-      await this.request("POST", "/Sessions/Playing", {
-        body: { ItemId: id, PlayMethod: "DirectStream", PositionTicks: 0 },
-      });
-      return;
-    }
-    await this.request("POST", "/Sessions/Playing/Stopped", {
-      body: { ItemId: id, PositionTicks: time ? Math.round(time * 10_000_000) : 0 },
-    });
+    if (submission) return;
+    await this.reportPlayback("start", { songId: id, positionSeconds: time ?? 0 });
   }
 
   // --- Search -----------------------------------------------------------------
@@ -601,25 +1073,30 @@ export class JellyfinClient implements MusicClient {
     const [artists, albums, songs] = await Promise.all([
       this.get<JfList>("/Artists/AlbumArtists", {
         userId: this.userId,
+        ...(this.libraryId ? { ParentId: this.libraryId } : {}),
         searchTerm: query,
         Limit: opts.artistCount ?? 20,
       }),
-      this.get<JfList>("/Items", {
-        userId: this.userId,
-        IncludeItemTypes: "MusicAlbum",
-        Recursive: "true",
-        searchTerm: query,
-        Limit: opts.albumCount ?? 20,
-        Fields: ALBUM_FIELDS,
-      }),
-      this.get<JfList>("/Items", {
-        userId: this.userId,
-        IncludeItemTypes: "Audio",
-        Recursive: "true",
-        searchTerm: query,
-        Limit: opts.songCount ?? 50,
-        Fields: SONG_FIELDS,
-      }),
+      this.get<JfList>(
+        "/Items",
+        this.itemParams({
+          IncludeItemTypes: "MusicAlbum",
+          Recursive: "true",
+          searchTerm: query,
+          Limit: opts.albumCount ?? 20,
+          Fields: ALBUM_FIELDS,
+        }),
+      ),
+      this.get<JfList>(
+        "/Items",
+        this.itemParams({
+          IncludeItemTypes: "Audio",
+          Recursive: "true",
+          searchTerm: query,
+          Limit: opts.songCount ?? 50,
+          Fields: SONG_FIELDS,
+        }),
+      ),
     ]);
     return {
       artist: (artists.Items ?? []).map((a) => this.toArtist(a)),
@@ -636,7 +1113,10 @@ export class JellyfinClient implements MusicClient {
       IncludeItemTypes: "Playlist",
       Recursive: "true",
       SortBy: "SortName",
-      Fields: "ChildCount",
+      Fields: "ChildCount,DateCreated",
+      // Deliberately not filtered by MediaTypes: playlists created without an
+      // explicit media type would disappear, and losing a user's playlist is
+      // worse than occasionally listing a video one.
     });
     return (data.Items ?? []).map((p) => ({
       id: p.Id,
@@ -646,7 +1126,7 @@ export class JellyfinClient implements MusicClient {
       songCount: p.ChildCount ?? 0,
       duration: ticksToSeconds(p.RunTimeTicks) ?? 0,
       created: p.DateCreated,
-      coverArt: imageItemId(p),
+      coverArt: imageRef(p),
     }));
   }
 
@@ -658,7 +1138,10 @@ export class JellyfinClient implements MusicClient {
         Fields: SONG_FIELDS,
       }),
     ]);
-    const songs = (entries.Items ?? []).map((s) => this.toSong(s));
+    const songs = (entries.Items ?? []).map((s) => ({
+      ...this.toSong(s),
+      playlistItemId: s.PlaylistItemId,
+    }));
     return {
       id: item.Id,
       name: item.Name,
@@ -667,7 +1150,7 @@ export class JellyfinClient implements MusicClient {
       songCount: songs.length,
       duration: ticksToSeconds(item.RunTimeTicks) ?? 0,
       created: item.DateCreated,
-      coverArt: imageItemId(item),
+      coverArt: imageRef(item),
       entry: songs,
     };
   }
@@ -733,6 +1216,21 @@ export class JellyfinClient implements MusicClient {
     }
   }
 
+  // Jellyfin has a real atomic move, so a drag-reorder is one request instead of
+  // clearing the playlist and rebuilding it (which loses the entries if the
+  // re-add half fails).
+  async movePlaylistItem(id: string, fromIndex: number, toIndex: number): Promise<boolean> {
+    try {
+      const entries = await this.playlistEntryIds(id);
+      const entryId = entries[fromIndex];
+      if (!entryId) return false;
+      await this.request("POST", `/Playlists/${id}/Items/${entryId}/Move/${toIndex}`);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async overwritePlaylist(id: string, songIds: string[]): Promise<void> {
     // Reorder = clear then re-add in the new order (no atomic reorder needed).
     const existing = await this.playlistEntryIds(id);
@@ -751,11 +1249,7 @@ export class JellyfinClient implements MusicClient {
   // --- Lyrics -----------------------------------------------------------------
 
   async getLyrics(id: string): Promise<StructuredLyrics[]> {
-    try {
-      const data = await this.get<{ Lyrics?: { Text: string; Start?: number }[] }>(
-        `/Audio/${id}/Lyrics`,
-      );
-      const lines = data.Lyrics ?? [];
+    const parse = (lines: { Text: string; Start?: number }[]): StructuredLyrics[] => {
       if (lines.length === 0) return [];
       const synced = lines.some((l) => l.Start != null);
       return [
@@ -768,12 +1262,60 @@ export class JellyfinClient implements MusicClient {
           })),
         },
       ];
+    };
+
+    try {
+      const data = await this.get<{ Lyrics?: { Text: string; Start?: number }[] }>(
+        `/Audio/${id}/Lyrics`,
+      );
+      return parse(data.Lyrics ?? []);
     } catch {
+      // No lyrics for this track, or a server without the lyrics endpoint.
       return [];
     }
   }
 
-  // --- Backend-specific escape hatches (unused for Jellyfin) ------------------
+  // --- Images -----------------------------------------------------------------
+
+  // Jellyfin accepts a base64 image body with the image's MIME type as the
+  // Content-Type, which is how playlist/album covers get set from a client.
+  async uploadPlaylistImage(id: string, file: File): Promise<void> {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result ?? "");
+        // Strip the "data:image/png;base64," prefix — Jellyfin wants raw base64.
+        resolve(result.slice(result.indexOf(",") + 1));
+      };
+      reader.onerror = () => reject(new ApiError("Could not read the image file"));
+      reader.readAsDataURL(file);
+    });
+
+    let res: Response;
+    try {
+      res = await fetch(`${this.creds.serverUrl}/Items/${id}/Images/Primary`, {
+        method: "POST",
+        headers: {
+          "Content-Type": file.type || "image/jpeg",
+          "X-Emby-Token": this.token,
+          Authorization: jellyfinAuthHeader(this.deviceId, this.token),
+        },
+        body: base64,
+      });
+    } catch {
+      throw new ApiError("Network error uploading cover");
+    }
+    if (res.status === 401) {
+      this.opts.onAuthError?.(this.creds);
+      throw new ApiError("Authentication expired", 401, true);
+    }
+    if (res.status === 403) {
+      throw new ApiError("You don't have permission to edit this playlist.", 403);
+    }
+    if (!res.ok) throw new ApiError(`Cover upload failed (HTTP ${res.status})`, res.status);
+  }
+
+  // --- Backend-specific escape hatches ---------------------------------------
 
   getServerAuthHeaders(): Record<string, string> {
     return { "x-emby-token": this.token };
@@ -781,10 +1323,6 @@ export class JellyfinClient implements MusicClient {
 
   get subsonicAuth(): { u: string; t: string; s: string } {
     return { u: "", t: "", s: "" };
-  }
-
-  async uploadPlaylistImage(): Promise<void> {
-    throw new ApiError("Setting a playlist cover isn't supported on Jellyfin.");
   }
 
   async createShare(): Promise<string | null> {

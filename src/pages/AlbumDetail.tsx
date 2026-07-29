@@ -8,6 +8,7 @@ import { client } from "~/auth/session";
 import type { Song } from "~/api/types";
 import { qk } from "~/lib/query";
 import { player } from "~/player/store";
+import { playInstantMix } from "~/features/playback-helpers";
 import { isStarred, toggleStar } from "~/features/stars";
 import { openAddToPlaylist } from "~/features/playlists/addToPlaylist";
 import { shareLink } from "~/features/share/share";
@@ -149,6 +150,7 @@ export default function AlbumDetail() {
                 <MenuButton
                   items={[
                     { label: "Shuffle", icon: "shuffle", onSelect: () => player.playNow([...songs()].sort(() => Math.random() - 0.5), 0) },
+                    { label: "Start radio", icon: "radio", onSelect: () => void playInstantMix(album().id, "album") },
                     { label: "Play next", icon: "next", onSelect: () => player.playNext(songs()) },
                     { label: "Add to queue", icon: "queue", onSelect: () => player.addToQueue(songs()) },
                     { label: "Add to playlist…", icon: "plus", onSelect: () => openAddToPlaylist(songs().map((s) => s.id)), separatorBefore: true },

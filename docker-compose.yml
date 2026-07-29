@@ -11,13 +11,13 @@
 # All-in-one stack that also runs Navidrome: ./docker-compose.full.yml
 
 services:
-  navidrome-web:
+  tonearm:
     build:
       context: .
       args:
         - COMMIT_HASH
-    image: navidrome-client-web:latest
-    container_name: navidrome-web
+    image: tonearm:latest
+    container_name: tonearm
     ports:
       - "8680:8080"
     environment:

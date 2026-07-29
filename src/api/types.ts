@@ -54,11 +54,21 @@ export interface Song {
   suffix?: string;
   duration?: number;
   bitRate?: number;
+  // Technical detail shown in track info. Jellyfin reports these directly;
+  // OpenSubsonic servers may too.
+  codec?: string;
+  sampleRate?: number;
+  bitDepth?: number;
+  channels?: number;
   path?: string;
   starred?: string;
   playCount?: number;
   played?: string; // OpenSubsonic: last-played timestamp
+  created?: string;
   userRating?: number;
+  // Stable identity of this track's slot *within a playlist*. Jellyfin needs it
+  // to move or remove one entry when the same track appears twice.
+  playlistItemId?: string;
   // ReplayGain data from OpenSubsonic, used for normalization.
   replayGain?: {
     trackGain?: number;

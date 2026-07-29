@@ -201,3 +201,31 @@
 .jf-connected-server {
   font-size: 13px;
 }
+
+/* Connection summary (Settings → Connections): what server we're on and how
+   audio is actually being delivered. */
+.server-info-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.server-info-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+}
+.server-info-row > span:last-child {
+  text-align: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.server-info-formats {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  /* Long codec lists shouldn't stretch the settings panel. */
+  overflow-wrap: anywhere;
+}

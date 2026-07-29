@@ -19,19 +19,26 @@ import {
   type StructuredLyrics,
 } from "./types";
 import { updateJwt, type ServerCredentials } from "./credentials";
+import { SUBSONIC_CLIENT } from "~/lib/branding";
 import type {
   AlbumListType,
   ClientOptions,
   LibraryStats,
+  LibraryView,
   MusicClient,
+  PlaybackEvent,
+  PlaybackReport,
+  PlaybackReportingStyle,
   ServerType,
+  StreamHandle,
+  StreamOptions,
 } from "./MusicClient";
 
 // Re-exported for existing importers of these from "~/api/client".
 export type { AlbumListType, LibraryStats };
 
 const API_VERSION = "1.16.1";
-const CLIENT_NAME = "navidrome-web";
+const CLIENT_NAME = SUBSONIC_CLIENT;
 
 export class SubsonicClient implements MusicClient {
   constructor(
@@ -47,6 +54,12 @@ export class SubsonicClient implements MusicClient {
 
   // Navidrome zips whole albums/playlists server-side (download.view).
   readonly canDownloadCollections = true;
+  readonly canSetPlaylistVisibility = true;
+  readonly hasFiveStarRatings = true;
+  readonly canTranscodeDownloads = true;
+  // Subsonic has no session concept: a now-playing ping plus a one-shot
+  // submission once the listen threshold is passed is the whole protocol.
+  readonly playbackReporting: PlaybackReportingStyle = "scrobble";
 
   get username(): string {
     return this.creds.username;
@@ -142,12 +155,57 @@ export class SubsonicClient implements MusicClient {
     return sub as T;
   }
 
+  // --- Playback ---
+
+  // Subsonic streams are plain HTTP responses the element can seek in, so
+  // "negotiation" is just building the URL the caller would have built anyway.
+  // The async shape exists for Jellyfin, which genuinely has to ask the server.
+  async resolveStream(id: string, opts: StreamOptions = {}): Promise<StreamHandle> {
+    return {
+      url: this.streamUrl(id, opts.maxBitRateKbps || undefined, opts.forceTranscode ? "mp3" : undefined),
+      canSeek: true,
+      startOffset: 0,
+    };
+  }
+
+  async reportPlayback(event: PlaybackEvent, report: PlaybackReport): Promise<void> {
+    // Only the now-playing ping maps onto Subsonic. The submission scrobble is
+    // driven by the listen threshold in the player, not by the stop event.
+    if (event === "start") {
+      await this.scrobble(report.songId, false).catch(() => {});
+    }
+  }
+
   // --- Connectivity ---
 
   async ping(): Promise<boolean> {
     await this.get("ping.view");
     return true;
   }
+
+  async getServerInfo(): Promise<{ name?: string; version?: string } | null> {
+    try {
+      const data = await this.get<{ type?: string; serverVersion?: string; version?: string }>(
+        "ping.view",
+      );
+      return { name: data.type, version: data.serverVersion ?? data.version };
+    } catch {
+      return null;
+    }
+  }
+
+  // Subsonic tokens aren't server-side sessions; there's nothing to revoke.
+  async revokeSession(): Promise<void> {}
+
+  // --- Libraries ---
+
+  // Subsonic exposes a single library namespace (music folders exist but the
+  // API can't scope most reads to one), so there is nothing to choose between.
+  async getLibraries(): Promise<LibraryView[]> {
+    return [];
+  }
+
+  setLibrary(): void {}
 
   // --- Library: artists / albums / songs ---
 
@@ -233,6 +291,31 @@ export class SubsonicClient implements MusicClient {
         count,
       });
       return legacy.similarSongs?.song ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  // Subsonic's radio generator is similar-songs, and it only seeds from a
+  // track. Album/artist/genre seeds resolve to a representative song first.
+  async getInstantMix(
+    id: string,
+    kind: "song" | "album" | "artist" | "genre" = "song",
+    count = 50,
+  ): Promise<Song[]> {
+    if (kind === "song") return this.getSimilarSongs(id, count);
+    try {
+      let seed: Song | undefined;
+      if (kind === "album") {
+        seed = (await this.getAlbum(id)).song[0];
+      } else if (kind === "genre") {
+        seed = (await this.getSongsByGenre(id, 1))[0];
+      } else {
+        const artist = await this.getArtist(id);
+        const firstAlbum = artist.albums?.[0];
+        seed = firstAlbum ? (await this.getAlbum(firstAlbum.id)).song[0] : undefined;
+      }
+      return seed ? await this.getSimilarSongs(seed.id, count) : [];
     } catch {
       return [];
     }
@@ -458,6 +541,11 @@ export class SubsonicClient implements MusicClient {
     for (const sid of changes.songIdToAdd ?? []) search.append("songIdToAdd", sid);
     for (const idx of changes.songIndexToRemove ?? []) search.append("songIndexToRemove", String(idx));
     await this.getRaw("updatePlaylist.view", search);
+  }
+
+  // Subsonic has no atomic move; the caller rewrites the playlist instead.
+  async movePlaylistItem(): Promise<boolean> {
+    return false;
   }
 
   // Replace a playlist's entire contents in the given order. Used for reordering:

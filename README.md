@@ -1,6 +1,6 @@
-# Navidrome Web Client
+# Tonearm
 
-A modern, **desktop-first** web client for [Navidrome](https://www.navidrome.org/) **and [Jellyfin](https://jellyfin.org/)** (music only). It runs entirely in the browser, talks directly to your existing server — Navidrome over its Subsonic/OpenSubsonic and native APIs, or Jellyfin over its native API — and keeps all durable state (playlists, favourites, play counts) **on the server** so it stays in sync with your other clients.
+**Tonearm** is a modern, **desktop-first** web client for [Navidrome](https://www.navidrome.org/) **and [Jellyfin](https://jellyfin.org/)** (music only). It runs entirely in the browser, talks directly to your existing server — Navidrome over its Subsonic/OpenSubsonic and native APIs, or Jellyfin over its native API — and keeps all durable state (playlists, favourites, play counts) **on the server** so it stays in sync with your other clients.
 
 At login you pick which server you're connecting to; the choice is stored with your credentials so the app knows which API to use. Existing Navidrome logins keep working unchanged across an update — to try Jellyfin, just log out and log back in with the Jellyfin option. (Only Jellyfin's music library is used — films and TV are never touched.)
 
@@ -12,7 +12,7 @@ There is **no database**, and in its simplest form **no backend** — the app is
 
 - **Library browsing** — artists, albums, tracks, genres, plus recently added / recently played / most played.
 - **Server-side search**, debounced.
-- **Playlists** — view, create, rename, reorder (drag), remove tracks, delete. All persisted via the API. Upload a **custom cover photo** per playlist (stored on the server via Navidrome's native API, so it syncs to every client).
+- **Playlists** — view, create, rename, reorder (drag), remove tracks, delete. All persisted via the API. Upload a **custom cover photo** per playlist, stored on the server so it syncs to every client. Reordering uses each backend's best mechanism (Jellyfin's atomic move; a rewrite on Subsonic).
 - **Favourites / stars** with instant feedback, synced to the server.
 - **Persistent now-playing bar** with full transport, a live seek bar, queue, and volume.
 - **Queue** side panel with drag-to-reorder.
@@ -22,6 +22,28 @@ There is **no database**, and in its simplest form **no backend** — the app is
 - **Keyboard shortcuts** for playback and navigation — fully rebindable.
 - **Admin music upload** — when deployed alongside your server (see below), admins get an upload button that accepts audio files, whole folders, or a ZIP, writes them into the library, and triggers a scan. All embedded metadata is preserved.
 - **A deep settings system** (see below).
+
+### Jellyfin specifics
+
+Tonearm speaks Jellyfin the way Jellyfin's own clients do, rather than treating it
+as a Subsonic server with different URLs:
+
+- **Negotiated playback.** Every track goes through `POST /Items/{id}/PlaybackInfo`
+  with a device profile built from what your browser can actually decode. Jellyfin
+  hands back either the original file to direct-play or a transcode URL, plus the
+  `PlaySessionId` that keys the server-side encoder. Nothing is guessed.
+- **Correct session reporting.** Playback start, progress every 10s, and a single
+  stop at the end — so play counts increment, Now Playing appears on the Jellyfin
+  dashboard, and resume positions are real.
+- **Remote control.** The app registers its capabilities and holds a WebSocket, so
+  it shows up as a "Play On" target and can be driven from the Jellyfin app or web
+  dashboard (play/pause, skip, seek, volume, repeat, shuffle, queue push).
+- **Quick Connect** sign-in — no password typing on a TV or shared machine.
+- **Multiple music libraries**, picked from the sidebar.
+- **Instant Mix radio** seeded from a track, album, artist, or genre.
+- **Live radio and music videos** from the same server, with no second login.
+- **Album/playlist downloads**, zipped in the browser since Jellyfin has no
+  server-side bundling endpoint.
 
 ## The settings system
 
@@ -92,12 +114,12 @@ In direct mode each user's Navidrome must allow this app's origin via **CORS** (
 To build and run the image by hand:
 
 ```bash
-docker build -t navidrome-client-web .
+docker build -t tonearm .
 docker run -d -p 8680:8080 \
   -e NAVIDROME_URL=http://host.docker.internal:4533 \
   -e MUSIC_DIR=/music \
   -v /path/to/your/music:/music \
-  --name navidrome-web navidrome-client-web
+  --name tonearm tonearm
 ```
 
 ## Authentication & privacy

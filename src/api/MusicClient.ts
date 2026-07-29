@@ -45,6 +45,72 @@ export interface ClientOptions {
   onAuthError?: (creds: ServerCredentials) => void;
 }
 
+// A resolved, playable stream for one track.
+//
+// Subsonic hands back a URL you can just play. Jellyfin needs a negotiation
+// round-trip first (POST /Items/{id}/PlaybackInfo), which decides direct-play
+// vs transcode and issues the PlaySessionId that ties the stream, the transcode
+// job, and every later progress report together. The extra fields carry that
+// context back so the player can report and tear down correctly.
+export interface StreamHandle {
+  url: string;
+  // Opaque per-playback id. Jellyfin scopes its ffmpeg jobs to this; report it
+  // on start/progress/stop so the right job is reused and later killed.
+  playSessionId?: string;
+  mediaSourceId?: string;
+  playMethod?: "DirectPlay" | "DirectStream" | "Transcode";
+  // False for a live server-side transcode: the response has no stable byte
+  // layout, so an element-level seek would land somewhere arbitrary. The player
+  // re-requests the stream from a new offset instead.
+  canSeek: boolean;
+  // Seconds already skipped server-side (startTimeTicks). The element's own
+  // currentTime is relative to this.
+  startOffset: number;
+  // Server-reported track length, when the negotiation revealed one.
+  duration?: number;
+}
+
+export interface StreamOptions {
+  // User's max-bitrate preference in kbps; 0/undefined = original quality.
+  maxBitRateKbps?: number;
+  // Start this many seconds into the track (server-side seek).
+  startSeconds?: number;
+  // Skip direct play — the browser already failed to decode this source.
+  forceTranscode?: boolean;
+}
+
+// What the player tells the server about the current playback.
+export interface PlaybackReport {
+  songId: string;
+  positionSeconds: number;
+  durationSeconds?: number;
+  isPaused?: boolean;
+  isMuted?: boolean;
+  volume?: number; // 0..1
+  repeat?: "off" | "all" | "one";
+  shuffle?: boolean;
+  stream?: StreamHandle;
+  // Upcoming queue, so a Jellyfin remote can show what's next.
+  queue?: { id: string; playlistItemId?: string }[];
+}
+
+export type PlaybackEvent = "start" | "progress" | "pause" | "stop";
+
+// How a backend wants playback reported.
+//   "scrobble" — Subsonic: a now-playing ping plus a one-shot submission once
+//                the listen threshold is passed. Progress isn't a concept.
+//   "session"  — Jellyfin: a real session lifecycle (start → periodic progress
+//                → stop). The *stop* report is what banks the play count and
+//                resume position, so it must land at the end, not mid-track.
+export type PlaybackReportingStyle = "scrobble" | "session";
+
+// A music library the server exposes. Jellyfin users routinely have more than
+// one ("Music", "Soundtracks", "Vinyl rips"); Subsonic has a single namespace.
+export interface LibraryView {
+  id: string;
+  name: string;
+}
+
 // The full surface the UI depends on. SubsonicClient and JellyfinClient both
 // satisfy this; add a method here (and to both classes) rather than reaching for
 // a backend-specific one from a component.
@@ -60,8 +126,26 @@ export interface MusicClient {
   // Debug helper: build a raw API URL for an endpoint (masked in the UI).
   buildUrl(endpoint: string, params?: Record<string, string | number | undefined>): string;
 
+  // --- Playback ---
+  // Negotiate a playable stream. Always prefer this over streamUrl() for actual
+  // playback: on Jellyfin it is the difference between a correct direct play
+  // and an unmanaged transcode.
+  resolveStream(id: string, opts?: StreamOptions): Promise<StreamHandle>;
+  readonly playbackReporting: PlaybackReportingStyle;
+  reportPlayback(event: PlaybackEvent, report: PlaybackReport): Promise<void>;
+
   // --- Connectivity ---
   ping(): Promise<boolean>;
+  // Human-readable server name/version for Settings. Null when unavailable.
+  getServerInfo(): Promise<{ name?: string; version?: string } | null>;
+  // Revoke this session server-side, where the backend supports it.
+  revokeSession(): Promise<void>;
+
+  // --- Libraries ---
+  // Music libraries to browse. Empty array = the backend has a single library.
+  getLibraries(): Promise<LibraryView[]>;
+  // Restrict subsequent library reads to one library id ("" = all).
+  setLibrary(id: string): void;
 
   // --- Library ---
   getArtists(): Promise<ArtistSummary[]>;
@@ -76,6 +160,12 @@ export interface MusicClient {
   getRandomSongs(size?: number, genre?: string): Promise<Song[]>;
   getTopSongs(artist: string, count?: number): Promise<Song[]>;
   getSimilarSongs(id: string, count?: number): Promise<Song[]>;
+  // "Instant mix" style radio seeded from any item (song, album, artist, genre).
+  getInstantMix(
+    id: string,
+    kind: "song" | "album" | "artist" | "genre",
+    count?: number,
+  ): Promise<Song[]>;
 
   // --- Genres ---
   getGenres(): Promise<Genre[]>;
@@ -116,16 +206,26 @@ export interface MusicClient {
     },
   ): Promise<void>;
   overwritePlaylist(id: string, songIds: string[], currentCount: number): Promise<void>;
+  // Move one entry to a new position. Backends with an atomic move use it;
+  // others fall back to a rewrite. Returns false when the caller should rewrite.
+  movePlaylistItem(id: string, fromIndex: number, toIndex: number): Promise<boolean>;
 
   // --- Lyrics ---
   getLyrics(id: string): Promise<StructuredLyrics[]>;
 
   // --- Capabilities (let the UI hide features a backend can't do) ---
-  // Whether whole-album/playlist downloads are supported (Navidrome zips them
-  // server-side; Jellyfin has no equivalent, so only single tracks download).
+  // Whether the *server* can bundle a whole album/playlist into one download
+  // (Navidrome zips them server-side). When false the app zips in the browser
+  // instead, so collection downloads still work — just not server-assisted.
   readonly canDownloadCollections: boolean;
   // Whether a custom playlist cover can be uploaded to the server.
   readonly canEditServerImages: boolean;
+  // Whether playlists have a public/private flag at all.
+  readonly canSetPlaylistVisibility: boolean;
+  // Whether the backend exposes a 0–5 star rating (vs a like/dislike toggle).
+  readonly hasFiveStarRatings: boolean;
+  // Whether transcoded (lossy) downloads can be requested from the server.
+  readonly canTranscodeDownloads: boolean;
 
   // --- Backend-specific escape hatches (used only by matching backends) ---
   // Auth headers for our own backend's /upload etc. (Navidrome proxy features).

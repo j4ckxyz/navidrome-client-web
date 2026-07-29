@@ -1,13 +1,13 @@
 #!/usr/bin/env bun
 /**
- * Cross-platform, safe updater for navidrome-client-web.
+ * Cross-platform, safe updater for Tonearm.
  *
  * Run with `bun run update`. Works on Windows, macOS, and Linux, and with both
  * Docker Compose v2 (`docker compose`) and v1 (`docker-compose`).
  *
  * Design (why this can't break your setup):
  *   1. INSPECT first, change nothing. It reads the EXACT Compose project and
- *      compose file that created your running `navidrome-web` container, and
+ *      compose file that created your running Tonearm container, and
  *      prints a plan before doing anything.
  *   2. It only ever acts on THAT project + compose file. It never removes
  *      containers and never introduces services it doesn't own — so it can't
@@ -36,8 +36,16 @@ const CONFIG_FILES = [
   ".env",
 ];
 
-const CLIENT_CONTAINER = "navidrome-web";
-const CLIENT_IMAGE = "navidrome-client-web:latest";
+// The container/image this deployment uses. The project was renamed from
+// "navidrome-web" to "tonearm"; deployments created before the rename still run
+// under the old name, so resolve whichever is actually present rather than
+// telling a working install that it has no container.
+const LEGACY_CONTAINER = "navidrome-web";
+const LEGACY_IMAGE = "navidrome-client-web:latest";
+// Resolved once Docker is known to be available (see below) — probing for a
+// container before that would fail on a machine with no Docker installed.
+let CLIENT_CONTAINER = LEGACY_CONTAINER;
+let CLIENT_IMAGE = LEGACY_IMAGE;
 
 // ---------------------------------------------------------------------------
 // Small process helpers
@@ -97,13 +105,20 @@ function inspectLabel(container: string, label: string): string {
 // 1. INSPECT — read-only; figure out exactly what we're dealing with
 // ---------------------------------------------------------------------------
 
-console.log("navidrome-client-web updater\n");
+console.log("Tonearm updater\n");
 
 if (!ok("git", ["rev-parse", "--is-inside-work-tree"])) {
   fail("This folder isn't a git checkout, so there's nothing to update from GitHub.");
 }
 if (!ok("docker", ["version"])) {
   fail("Docker isn't available. Start Docker Desktop / the Docker daemon and retry.");
+}
+
+// Prefer the current names, but keep working against a deployment created
+// before the project was renamed.
+if (containerExists("tonearm")) {
+  CLIENT_CONTAINER = "tonearm";
+  CLIENT_IMAGE = "tonearm:latest";
 }
 
 // Compose command for both v2 (plugin) and v1 (standalone).
@@ -190,7 +205,7 @@ let buildRes = run(compose[0], upArgs, { env: buildEnv });
 
 if (buildRes.status !== 0) {
   // The only safe remediation: the client container holds NO data (everything is
-  // in your music/data folders), so if a stale `navidrome-web` is blocking the
+  // in your music/data folders), so if a stale client container is blocking the
   // recreate (e.g. it was first started via `docker run`, not compose), we can
   // remove just that one and retry. We never touch a `navidrome` container.
   console.log("\nFirst attempt failed; clearing the stale client container and retrying once…");

@@ -6,6 +6,7 @@ import { createMemo } from "solid-js";
 import { client } from "~/auth/session";
 import { qk } from "~/lib/query";
 import { player } from "~/player/store";
+import { playInstantMix } from "~/features/playback-helpers";
 import { AsyncState } from "~/ui/AsyncState";
 import { SongList } from "~/ui/SongList";
 import { Icon } from "~/ui/Icon";
@@ -38,6 +39,9 @@ export default function GenreDetail() {
           </button>
           <button class="btn" onClick={() => player.playNow([...songs()].sort(() => Math.random() - 0.5), 0)}>
             <Icon name="shuffle" size={17} /> Shuffle
+          </button>
+          <button class="btn" onClick={() => void playInstantMix(genre(), "genre")}>
+            <Icon name="radio" size={17} /> Radio
           </button>
           <span class="muted">{formatCount(songs().length, "track")}</span>
         </div>

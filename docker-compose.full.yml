@@ -23,13 +23,13 @@ services:
       - ./nd-data:/data
     restart: unless-stopped
 
-  navidrome-web:
+  tonearm:
     build:
       context: .
       args:
         - COMMIT_HASH
-    image: navidrome-client-web:latest
-    container_name: navidrome-web
+    image: tonearm:latest
+    container_name: tonearm
     depends_on:
       - navidrome
     ports:

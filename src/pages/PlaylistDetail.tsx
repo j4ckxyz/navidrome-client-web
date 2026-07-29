@@ -65,15 +65,21 @@ export default function PlaylistDetail() {
     }
   });
 
-  async function persistOrder(next: Song[]) {
+  async function persistOrder(next: Song[], from: number, to: number) {
     setSaving(true);
     setOrder(next);
     try {
-      await client()!.overwritePlaylist(
-        params.id,
-        next.map((s) => s.id),
-        q.data?.entry.length ?? next.length,
-      );
+      // Prefer an atomic move where the backend has one (Jellyfin). Rewriting
+      // the whole playlist means deleting every entry and re-adding it, which
+      // is slow and loses the playlist entirely if the re-add half fails.
+      const moved = await client()!.movePlaylistItem(params.id, from, to);
+      if (!moved) {
+        await client()!.overwritePlaylist(
+          params.id,
+          next.map((s) => s.id),
+          q.data?.entry.length ?? next.length,
+        );
+      }
       queryClient.invalidateQueries({ queryKey: qk.playlist(params.id) });
     } finally {
       setSaving(false);
@@ -88,7 +94,7 @@ export default function PlaylistDetail() {
     const next = [...order()];
     const [moved] = next.splice(from, 1);
     next.splice(target, 0, moved);
-    void persistOrder(next);
+    void persistOrder(next, from, target);
   }
 
   async function removeAt(index: number) {
@@ -198,22 +204,27 @@ export default function PlaylistDetail() {
                     <p class="muted">{pl().comment}</p>
                   </Show>
                   <div class="detail-sub">
-                    <button
-                      class="pl-visibility"
-                      classList={{ "pl-visibility-on": pl().public }}
-                      onClick={toggleVisibility}
-                      disabled={!ownsCurrent()}
-                      title={
-                        ownsCurrent()
-                          ? pl().public
-                            ? "Public — visible to everyone on this server. Click to make private."
-                            : "Private — only you can see this. Click to make public."
-                          : `Owned by ${pl().owner}`
-                      }
-                    >
-                      <Icon name={pl().public ? "globe" : "lock"} size={12} />
-                      {pl().public ? "Public" : "Private"}
-                    </button>
+                    {/* Jellyfin playlists have no public/private flag — access is
+                        granted per user on the server — so hide the toggle there
+                        rather than showing a control that can't do anything. */}
+                    <Show when={client()?.canSetPlaylistVisibility}>
+                      <button
+                        class="pl-visibility"
+                        classList={{ "pl-visibility-on": pl().public }}
+                        onClick={toggleVisibility}
+                        disabled={!ownsCurrent()}
+                        title={
+                          ownsCurrent()
+                            ? pl().public
+                              ? "Public — visible to everyone on this server. Click to make private."
+                              : "Private — only you can see this. Click to make public."
+                            : `Owned by ${pl().owner}`
+                        }
+                      >
+                        <Icon name={pl().public ? "globe" : "lock"} size={12} />
+                        {pl().public ? "Public" : "Private"}
+                      </button>
+                    </Show>
                     <span class="detail-dot">{formatCount(order().length, "track")}</span>
                     <span class="detail-dot">{formatLongDuration(pl().duration)}</span>
                     <Show when={saving()}>

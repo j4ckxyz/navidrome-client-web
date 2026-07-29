@@ -6,6 +6,7 @@ import { createSignal, Show } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { settings, updateSettings, resetSettings, exportSettings, importSettings } from "~/settings/store";
 import { JellyfinConnect } from "~/features/settings/JellyfinConnect";
+import { ServerInfo } from "~/features/settings/ServerInfo";
 import { canPromptInstall, isInstalled, isIos, promptInstall } from "~/lib/installPwa";
 import { activeUsername } from "~/auth/session";
 import { player } from "~/player/store";
@@ -38,7 +39,7 @@ export default function Settings() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "navidrome-web-settings.json";
+    a.download = "tonearm-settings.json";
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -254,6 +255,7 @@ export default function Settings() {
 
           {/* Connections */}
           <Show when={tab() === "connections"}>
+            <ServerInfo />
             <JellyfinConnect />
 
             <div class="settings-block">

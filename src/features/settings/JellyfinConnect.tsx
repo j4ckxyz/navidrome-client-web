@@ -2,7 +2,7 @@
 // unlocks live radio (from Live TV m3u tuners) and music-video matching.
 
 import { createSignal, Show } from "solid-js";
-import { jellyfin, jellyfinLogin, jellyfinLogout } from "~/api/jellyfinExtras";
+import { jellyfin, jellyfinIsPrimary, jellyfinLogin, jellyfinLogout } from "~/api/jellyfinExtras";
 import { queryClient } from "~/lib/query";
 import { Icon } from "~/ui/Icon";
 
@@ -38,9 +38,19 @@ export function JellyfinConnect() {
     <div class="settings-block">
       <h3 class="settings-block-title">Jellyfin</h3>
       <p class="muted settings-hint">
-        Link a Jellyfin server to unlock two extras: live radio from its Live TV channels
-        (m3u tuners) on the Radio page, and music videos for the song you're playing.
-        Your Navidrome library is unaffected.
+        <Show
+          when={jellyfinIsPrimary()}
+          fallback={
+            <>
+              Link a Jellyfin server to unlock two extras: live radio from its Live TV
+              channels (m3u tuners) on the Radio page, and music videos for the song you're
+              playing. Your Navidrome library is unaffected.
+            </>
+          }
+        >
+          You're signed in to Jellyfin, so live radio (Live TV channels) and music videos
+          already work — no separate connection needed.
+        </Show>
       </p>
 
       <Show
@@ -97,9 +107,13 @@ export function JellyfinConnect() {
                 </span>
               </div>
             </div>
-            <button class="btn" onClick={disconnect}>
-              <Icon name="logout" size={16} /> Disconnect
-            </button>
+            {/* Nothing to disconnect when this is just the primary login —
+                signing out of the app is how you'd end that session. */}
+            <Show when={!jellyfinIsPrimary()}>
+              <button class="btn" onClick={disconnect}>
+                <Icon name="logout" size={16} /> Disconnect
+              </button>
+            </Show>
           </div>
         )}
       </Show>

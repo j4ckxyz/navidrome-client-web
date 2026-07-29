@@ -19,19 +19,42 @@ import {
   type ServerCredentials,
 } from "~/api/credentials";
 
+const LIBRARY_KEY = "nd:library";
+
 const [client, setClient] = createSignal<MusicClient | null>(null);
 const [reauthRequired, setReauthRequired] = createSignal(false);
 const [activeServerUrl, setActiveServerUrl] = createSignal<string | null>(null);
 const [activeUsername, setActiveUsername] = createSignal<string | null>(null);
 const [isAdmin, setIsAdmin] = createSignal(false);
+// Which music library is in scope. "" = every library the account can see.
+// Jellyfin accounts commonly have several; Subsonic has one namespace.
+const [activeLibrary, setActiveLibraryId] = createSignal<string>(
+  localStorage.getItem(LIBRARY_KEY) ?? "",
+);
 
-export { client, reauthRequired, activeServerUrl, activeUsername, isAdmin };
+export { client, reauthRequired, activeServerUrl, activeUsername, isAdmin, activeLibrary };
 
 function buildClient(creds: ServerCredentials): MusicClient {
   const opts = { onAuthError: () => setReauthRequired(true) };
-  return creds.serverType === "jellyfin"
-    ? new JellyfinClient(creds, opts)
-    : new SubsonicClient(creds, opts);
+  const c =
+    creds.serverType === "jellyfin"
+      ? new JellyfinClient(creds, opts)
+      : new SubsonicClient(creds, opts);
+  c.setLibrary(activeLibrary());
+  return c;
+}
+
+// Scope browsing to one library. Persisted so it survives a reload, and the
+// caller invalidates cached queries.
+export function setActiveLibrary(id: string): void {
+  setActiveLibraryId(id);
+  try {
+    if (id) localStorage.setItem(LIBRARY_KEY, id);
+    else localStorage.removeItem(LIBRARY_KEY);
+  } catch {
+    // storage unavailable — the choice just won't persist
+  }
+  client()?.setLibrary(id);
 }
 
 // Restore a previous session on boot, if any.
@@ -43,6 +66,17 @@ export function initSession(): void {
     setActiveUsername(creds.username);
     setIsAdmin(creds.isAdmin ?? false);
   }
+}
+
+// Adopt credentials obtained outside the password flow (Quick Connect).
+export function adoptCredentials(creds: ServerCredentials): void {
+  saveCredentials(creds);
+  setActiveServer(creds.serverUrl);
+  setClient(buildClient(creds));
+  setActiveServerUrl(creds.serverUrl);
+  setActiveUsername(creds.username);
+  setIsAdmin(creds.isAdmin ?? false);
+  setReauthRequired(false);
 }
 
 export type LoginMethod = "auto" | "native" | "subsonic";
@@ -106,12 +140,16 @@ export function switchServer(creds: ServerCredentials): void {
 
 export function logout(): void {
   const url = activeServerUrl();
+  // Invalidate the token server-side first (Jellyfin), so the device stops
+  // appearing under Dashboard → Devices with a live session.
+  void client()?.revokeSession();
   if (url) clearCredentials(url);
   setClient(null);
   setActiveServerUrl(null);
   setActiveUsername(null);
   setIsAdmin(false);
   setReauthRequired(false);
+  setActiveLibrary("");
 }
 
 // Require a non-null client. Components under the authed shell can rely on this.
