@@ -83,17 +83,18 @@ body {
 }
 
 /* Native builds retain real macOS traffic lights / Windows caption buttons.
-   This is only the draggable area beneath them; the browser build has no extra
-   spacing or hit target. The translucent fill lets Mica/Vibrancy show through. */
+   On macOS the caption overlays the content, so this reserves the draggable area
+   behind the traffic lights; the translucent fill lets Vibrancy show through.
+   Windows, Linux and the browser build get no extra spacing or hit target. */
 .native-titlebar {
   display: none;
 }
 
-.tauri-desktop #root {
+.tauri-overlay-titlebar #root {
   padding-top: 34px;
 }
 
-.tauri-desktop .native-titlebar {
+.tauri-overlay-titlebar .native-titlebar {
   position: fixed;
   z-index: 10000;
   inset: 0 0 auto;

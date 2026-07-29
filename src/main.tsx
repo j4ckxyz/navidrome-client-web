@@ -17,8 +17,15 @@ import "~/pages/pages.css";
 
 // Tauri provides the native window controls and compositor blur; this marker
 // reserves a draggable title-bar region without changing the browser/PWA UI.
+// Only macOS hides its caption behind the content (titleBarStyle "Overlay"), so
+// only macOS gets the reserved strip — on Windows and Linux the real title bar
+// sits above the client area and the strip would be a second, dead one covering
+// the top of the UI.
 if ("__TAURI_INTERNALS__" in window) {
   document.documentElement.classList.add("tauri-desktop");
+  if (/mac/i.test(navigator.userAgent)) {
+    document.documentElement.classList.add("tauri-overlay-titlebar");
+  }
 }
 
 // Restore a prior session and queue before first paint.
