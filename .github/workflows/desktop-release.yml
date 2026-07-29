@@ -22,7 +22,6 @@ permissions:
 concurrency:
   group: desktop-release-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
   cancel-in-progress: false
-
 jobs:
   build:
     strategy:
@@ -58,8 +57,9 @@ jobs:
           tagName: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
           releaseName: Tonearm ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
           releaseBody: Native desktop builds for macOS 15+, Windows, and Linux. Downloads made inside Tonearm are saved for offline listening.
-          # Tag pushes/manual runs create a reviewable draft. If someone has
-          # already published a release, attach installers to that live release.
-          releaseDraft: ${{ github.event_name != 'release' }}
+          # Releases created from a tag or manual run must be public so the
+          # installers appear in GitHub's Releases tab. For an existing
+          # published release, the action simply attaches the new assets.
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
