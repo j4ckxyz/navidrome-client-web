@@ -30,8 +30,10 @@ they only reduce how often the heuristics fire.
 
 Already applied in `tauri.conf.json`:
 
-- `publisher`, `homepage`, `copyright` and `longDescription`, so the binary
-  carries real version metadata instead of showing "Unknown publisher".
+- `publisher`, `homepage`, `copyright` and `longDescription`, so the installer
+  carries useful product metadata. These fields do **not** change the
+  Authenticode identity: Windows still shows "Unknown publisher" until the
+  executable is code-signed.
 - `webviewInstallMode: embedBootstrapper` — the default `downloadBootstrapper`
   makes the installer fetch the WebView2 runtime over the network at install
   time, which is exactly the dropper behaviour heuristics look for. Escalate to
@@ -39,8 +41,8 @@ Already applied in `tauri.conf.json`:
   touches the network, at roughly +120 MB.
 - `nsis.installMode: both` — `currentUser` installs into `%LOCALAPPDATA%`, and
   unsigned executables running from AppData are treated more harshly. The
-  trade-off is that `both` requires a UAC prompt for every install, including
-  per-user ones. Revert to `currentUser` if the prompt matters more.
+  installer lets the user choose a per-user install or a system-wide install;
+  only the system-wide choice requires elevation.
 - The workflow builds `nsis,msi`. An `.msi` executed by `msiexec` is generally
   treated better than a self-extracting `.exe`, so it is the fallback to point
   users at when the setup `.exe` is quarantined.
