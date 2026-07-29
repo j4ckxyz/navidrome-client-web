@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clapperboard,
   Clock,
+  Copy,
   Disc,
   Download,
   FileText,
@@ -29,6 +30,7 @@ import {
   Plus,
   Link2,
   Radio,
+  RefreshCw,
   Repeat,
   Repeat1,
   Search,
@@ -103,7 +105,9 @@ export type IconName =
   | "atom"
   | "sliders"
   | "radio"
-  | "video";
+  | "video"
+  | "refresh"
+  | "copy";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LucideComp = Component<any>;
@@ -163,6 +167,8 @@ const LUCIDE_MAP: Record<IconName, LucideComp> = {
   sliders: SlidersHorizontal,
   radio: Radio,
   video: Clapperboard,
+  refresh: RefreshCw,
+  copy: Copy,
 };
 
 export interface IconProps {

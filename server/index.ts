@@ -39,6 +39,24 @@ const APP_NAME = "Tonearm";
 const SUBSONIC_CLIENT = "tonearm";
 const linkPreviewsEnabled = !!(NAVIDROME_URL && OG_USER && OG_PASS);
 
+// --- Update checking --------------------------------------------------------
+//
+// The image records the commit it was built from (Dockerfile ARG/ENV), so the
+// running server can compare itself against GitHub and tell an admin when a
+// newer build exists. Point these at your fork if you run one.
+const UPDATE_REPO = process.env.UPDATE_REPO ?? "j4ckxyz/navidrome-client-web";
+const UPDATE_BRANCH = process.env.UPDATE_BRANCH ?? "main";
+// Applying an update from the web UI is OFF unless the operator opts in *and*
+// gives the container what the updater needs (a git checkout and the Docker
+// socket). See DEPLOYMENT.md — mounting the Docker socket grants the container
+// root-equivalent control of the host, so it must be a deliberate choice.
+const SELF_UPDATE = /^(1|true|yes)$/i.test(process.env.SELF_UPDATE ?? "");
+// Where the git checkout is mounted when self-update is enabled.
+const REPO_DIR = (process.env.REPO_DIR ?? "/repo").replace(/\/+$/, "");
+// Verifying a Jellyfin admin needs a server we trust. Configured here rather
+// than taken from the request so this can't be pointed at an arbitrary host.
+const JELLYFIN_URL = (process.env.JELLYFIN_URL ?? "").replace(/\/+$/, "");
+
 const AUDIO_EXTS = new Set([
   "mp3", "flac", "ogg", "opus", "m4a", "aac", "wav", "wv", "ape",
   "mpc", "wma", "aiff", "aif", "dsf", "dff",
@@ -150,11 +168,224 @@ app.get("/api/config", (c) =>
     uploadEnabled: !!(NAVIDROME_URL && MUSIC_DIR),
     linkPreviews: linkPreviewsEnabled,
     version: "1.0.0",
+    // The commit this build came from, so the UI can show what's running even
+    // before an update check runs.
+    commit: runningCommit(),
+    // Whether this deployment can apply an update itself, or can only report
+    // that one is available and let the admin run the updater.
+    canSelfUpdate: selfUpdateReady(),
   }),
 );
 
+// ---- Update check ----------------------------------------------------------
+//
+// Two separate things, deliberately:
+//   GET  /api/update/check — read-only. Compares the commit this build was made
+//        from against the head of the configured branch on GitHub. Exposes only
+//        public information (our own revision plus a public repo's), so it isn't
+//        credential-gated; it *is* cached and single-flighted, because
+//        unauthenticated GitHub API calls are rate-limited per IP.
+//   POST /api/update/apply — actually runs the updater. Admin-verified, opt-in,
+//        and refuses unless the prerequisites are really present.
+
+// The commit this server is running. In Docker it comes from the build arg; from
+// a bare checkout, ask git.
+let cachedCommit: string | null = null;
+function runningCommit(): string {
+  if (cachedCommit !== null) return cachedCommit;
+  const fromEnv = (process.env.COMMIT_HASH ?? "").trim();
+  if (fromEnv) {
+    cachedCommit = fromEnv;
+    return cachedCommit;
+  }
+  try {
+    const res = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: repoRoot() });
+    cachedCommit = res.success ? new TextDecoder().decode(res.stdout).trim() : "";
+  } catch {
+    cachedCommit = "";
+  }
+  return cachedCommit;
+}
+
+// Where the updater should run. The mounted checkout when self-update is set up,
+// otherwise the directory the server was started from (bare-metal / dev).
+function repoRoot(): string {
+  return SELF_UPDATE && existsSync(join(REPO_DIR, ".git")) ? REPO_DIR : process.cwd();
+}
+
+// Self-update needs all three: the opt-in, a real git checkout to update, and a
+// reachable Docker daemon to rebuild with. Missing any of them and the UI falls
+// back to showing the command to run by hand.
+//
+// Memoized: /api/config is hit on every page load, and probing Docker means
+// spawning a process. The answer only changes if the operator remounts things,
+// which means restarting the container anyway.
+let selfUpdateReadyCache: boolean | null = null;
+function selfUpdateReady(): boolean {
+  if (selfUpdateReadyCache !== null) return selfUpdateReadyCache;
+  selfUpdateReadyCache = computeSelfUpdateReady();
+  return selfUpdateReadyCache;
+}
+
+function computeSelfUpdateReady(): boolean {
+  if (!SELF_UPDATE) return false;
+  if (!existsSync(join(repoRoot(), ".git"))) return false;
+  try {
+    return Bun.spawnSync(["docker", "version"], { cwd: repoRoot() }).success;
+  } catch {
+    return false;
+  }
+}
+
+interface UpdateStatus {
+  current: string;
+  latest: string;
+  behind: number | null; // commits behind, when GitHub could compare them
+  updateAvailable: boolean;
+  publishedAt?: string;
+  message?: string;
+  compareUrl?: string;
+  repo: string;
+  branch: string;
+  canSelfUpdate: boolean;
+  // Set when the check itself couldn't complete (offline, rate-limited).
+  error?: string;
+}
+
+const CHECK_TTL_MS = 15 * 60_000;
+let checkCache: { at: number; status: UpdateStatus } | null = null;
+let checkInFlight: Promise<UpdateStatus> | null = null;
+
+async function ghJson(path: string): Promise<any | null> {
+  try {
+    const res = await fetch(`https://api.github.com${path}`, {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": APP_NAME },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function fetchUpdateStatus(): Promise<UpdateStatus> {
+  const current = runningCommit();
+  const base: UpdateStatus = {
+    current,
+    latest: "",
+    behind: null,
+    updateAvailable: false,
+    repo: UPDATE_REPO,
+    branch: UPDATE_BRANCH,
+    canSelfUpdate: selfUpdateReady(),
+  };
+
+  const head = await ghJson(`/repos/${UPDATE_REPO}/commits/${UPDATE_BRANCH}`);
+  if (!head?.sha) {
+    return { ...base, error: "Could not reach GitHub to check for updates." };
+  }
+
+  const latest = String(head.sha);
+  const status: UpdateStatus = {
+    ...base,
+    latest,
+    publishedAt: head.commit?.author?.date,
+    message: String(head.commit?.message ?? "").split("\n")[0],
+    updateAvailable: !!current && current !== latest,
+  };
+
+  if (!current) {
+    // A build with no recorded commit (e.g. an image built without the build
+    // arg). We can show what's newest, but not whether we're behind it.
+    return { ...status, updateAvailable: false, error: "This build didn't record its version." };
+  }
+  if (!status.updateAvailable) return status;
+
+  status.compareUrl = `https://github.com/${UPDATE_REPO}/compare/${current}...${latest}`;
+  const cmp = await ghJson(`/repos/${UPDATE_REPO}/compare/${current}...${latest}`);
+  if (typeof cmp?.behind_by === "number" || typeof cmp?.ahead_by === "number") {
+    // "ahead_by" counts commits on latest that we don't have — that's how far
+    // behind this build is.
+    status.behind = cmp.ahead_by ?? null;
+    // A build from a commit that isn't an ancestor (local edits, another
+    // branch) still counts as "there is something newer", just not a count.
+    if (cmp.status === "identical") status.updateAvailable = false;
+  }
+  return status;
+}
+
+app.get("/api/update/check", async (c) => {
+  const force = c.req.query("force") === "1";
+  const fresh = checkCache && Date.now() - checkCache.at < CHECK_TTL_MS;
+  if (fresh && !force) return c.json(checkCache!.status);
+
+  // Single-flight: a page full of admins refreshing shouldn't burn the
+  // unauthenticated GitHub rate limit sixty times over.
+  checkInFlight ??= fetchUpdateStatus()
+    .then((status) => {
+      checkCache = { at: Date.now(), status };
+      return status;
+    })
+    .finally(() => {
+      checkInFlight = null;
+    });
+
+  return c.json(await checkInFlight);
+});
+
+// Applying an update rebuilds and restarts this very container, so the response
+// usually never arrives — the client polls /api/update/check afterwards instead.
+let applyInFlight = false;
+
+app.post("/api/update/apply", async (c) => {
+  if (!SELF_UPDATE) {
+    return c.json(
+      { error: "Self-update isn't enabled on this server. Run `bun run update` on the host." },
+      503,
+    );
+  }
+  if (!(await verifyOperator(authHeadersFrom(c)))) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+  if (!selfUpdateReady()) {
+    return c.json(
+      { error: "Self-update is enabled but this container has no git checkout or Docker access." },
+      503,
+    );
+  }
+  if (applyInFlight) {
+    return c.json({ error: "An update is already running." }, 409);
+  }
+
+  applyInFlight = true;
+  // Fixed argv, no shell, nothing from the request reaches it.
+  const proc = Bun.spawn(["bun", "run", "scripts/update.ts"], {
+    cwd: repoRoot(),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const [out, err, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]).finally(() => {
+    applyInFlight = false;
+  });
+
+  // The commit changed under us; recompute it next time it's asked for.
+  cachedCommit = null;
+  checkCache = null;
+
+  return c.json({ ok: code === 0, exitCode: code, log: `${out}${err}`.trim() }, code === 0 ? 200 : 500);
+});
+
 // ---- Admin verification ----------------------------------------------------
 
+// Is this caller an admin of the *proxied Navidrome*? This is the gate for
+// anything that writes to the music library, so it stays Navidrome-only:
+// widening it to other identity providers would widen who can write files.
 async function verifyAdmin(opts: {
   jwt?: string;
   subUser?: string;
@@ -204,6 +435,7 @@ interface AuthHeaders {
   subUser?: string;
   subToken?: string;
   subSalt?: string;
+  jellyfinToken?: string;
 }
 
 function authHeadersFrom(c: Context): AuthHeaders {
@@ -212,7 +444,33 @@ function authHeadersFrom(c: Context): AuthHeaders {
     subUser: c.req.header("x-nd-subsonic-u"),
     subToken: c.req.header("x-nd-subsonic-t"),
     subSalt: c.req.header("x-nd-subsonic-s"),
+    jellyfinToken: c.req.header("x-emby-token"),
   };
+}
+
+// Admin check for updating the deployment. Separate from verifyAdmin because it
+// answers a different question — "may this person operate this install?" — and
+// so accepts a Jellyfin administrator too, which the library-write paths
+// deliberately do not.
+async function verifyOperator(h: AuthHeaders): Promise<boolean> {
+  // Ask the *configured* Jellyfin whether this token belongs to an
+  // administrator. The URL comes from config, never from the request, so this
+  // can't be aimed at an arbitrary host.
+  if (h.jellyfinToken && JELLYFIN_URL) {
+    try {
+      const res = await fetch(`${JELLYFIN_URL}/Users/Me`, {
+        headers: { "X-Emby-Token": h.jellyfinToken },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (res.ok) {
+        const user = (await res.json()) as { Policy?: { IsAdministrator?: boolean } };
+        if (user?.Policy?.IsAdministrator === true) return true;
+      }
+    } catch {
+      // fall through to the Navidrome check
+    }
+  }
+  return verifyAdmin(h);
 }
 
 // Kick off a Navidrome library scan so newly written/moved files appear.

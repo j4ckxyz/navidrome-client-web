@@ -7,8 +7,9 @@ import { useSearchParams } from "@solidjs/router";
 import { settings, updateSettings, resetSettings, exportSettings, importSettings } from "~/settings/store";
 import { JellyfinConnect } from "~/features/settings/JellyfinConnect";
 import { ServerInfo } from "~/features/settings/ServerInfo";
+import { UpdateCheck } from "~/features/settings/UpdateCheck";
 import { canPromptInstall, isInstalled, isIos, promptInstall } from "~/lib/installPwa";
-import { activeUsername } from "~/auth/session";
+import { activeUsername, isAdmin } from "~/auth/session";
 import { player } from "~/player/store";
 import { ThemeEditor } from "~/features/settings/ThemeEditor";
 import { EqualizerEditor } from "~/features/settings/EqualizerEditor";
@@ -256,6 +257,11 @@ export default function Settings() {
           {/* Connections */}
           <Show when={tab() === "connections"}>
             <ServerInfo />
+            {/* Updating the deployment is an operator concern — only admins can
+                act on it, so only admins are shown it. */}
+            <Show when={isAdmin()}>
+              <UpdateCheck />
+            </Show>
             <JellyfinConnect />
 
             <div class="settings-block">
