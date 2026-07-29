@@ -123,7 +123,7 @@ Installing the update is a separate question, because the shipped container deli
 **A) All-in-one (also runs Navidrome) — simplest path to every feature:**
 
 ```bash
-MUSIC_HOST_DIR=/path/to/your/music docker compose -f docker-compose.full.yml up -d
+COMMIT_HASH=$(git rev-parse HEAD) MUSIC_HOST_DIR=/path/to/your/music docker compose -f docker-compose.full.yml up -d
 # open http://localhost:8680 and create your admin account on first login
 ```
 
@@ -133,13 +133,13 @@ MUSIC_HOST_DIR=/path/to/your/music docker compose -f docker-compose.full.yml up 
 NAVIDROME_URL=http://host.docker.internal:4533 \
 MUSIC_DIR=/music \
 MUSIC_HOST_DIR=/path/to/your/music \
-docker compose up -d
+bun run compose:up
 ```
 
 **C) Public client, users bring their own server (no uploads):**
 
 ```bash
-docker compose up -d   # NAVIDROME_URL stays empty → direct mode
+bun run compose:up   # NAVIDROME_URL stays empty → direct mode
 ```
 
 In direct mode each user's Navidrome must allow this app's origin via **CORS** (or be reverse-proxied behind the same origin). See [DEPLOYMENT.md](DEPLOYMENT.md#direct-mode-cors) for the exact headers and an nginx same-origin example.
@@ -196,6 +196,31 @@ bun run typecheck  # type-check only
 ```
 
 During development you'll hit the same CORS rules above. The easiest dev setup is to run Navidrome locally and use a reverse proxy, or enable permissive CORS on your dev Navidrome instance.
+
+### Native desktop builds
+
+Tonearm uses Tauri for its macOS, Windows and Linux application. Unlike Electron,
+it reuses the operating system WebView instead of shipping a separate Chromium
+runtime for every install; the release profile also enables LTO, size optimisation,
+symbol stripping and abort-on-panic. This keeps startup, package size and baseline
+memory use close to the web client rather than adding a browser process.
+
+```bash
+bun run desktop:dev
+bun run desktop:build
+```
+
+Tags matching `v*` trigger `.github/workflows/desktop-release.yml`, producing a
+universal (Apple Silicon + Intel) macOS 15+ DMG, a Windows NSIS installer and a
+Linux AppImage as a draft GitHub release. Publishing a release created through
+GitHub's UI also triggers the same builds and attaches them to that release.
+Playback commands are exposed as native
+menu accelerators using Command on macOS and Control on Windows/Linux. The same
+track, album and playlist Download actions as the web app save music for offline
+listening. Desktop icons are generated from the existing web icon at build time,
+so native binary assets are not duplicated in the repository. Native builds also
+retain the platform window controls and use macOS Vibrancy or Windows Mica behind
+the draggable title bar; unsupported compositors fall back without extra work.
 
 ## Out of scope
 

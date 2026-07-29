@@ -27,7 +27,7 @@ services:
     build:
       context: .
       args:
-        - COMMIT_HASH
+        COMMIT_HASH: ${COMMIT_HASH:-}
     image: tonearm:latest
     container_name: tonearm
     depends_on:

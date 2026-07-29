@@ -15,6 +15,12 @@ import { App } from "./App";
 import "~/styles/global.css";
 import "~/pages/pages.css";
 
+// Tauri provides the native window controls and compositor blur; this marker
+// reserves a draggable title-bar region without changing the browser/PWA UI.
+if ("__TAURI_INTERNALS__" in window) {
+  document.documentElement.classList.add("tauri-desktop");
+}
+
 // Restore a prior session and queue before first paint.
 initSession();
 player.restoreQueue();
