@@ -8,6 +8,7 @@ import { settings, updateSettings, resetSettings, exportSettings, importSettings
 import { JellyfinConnect } from "~/features/settings/JellyfinConnect";
 import { ServerInfo } from "~/features/settings/ServerInfo";
 import { UpdateCheck } from "~/features/settings/UpdateCheck";
+import { DesktopDownloads } from "~/features/settings/DesktopDownloads";
 import { canPromptInstall, isInstalled, isIos, promptInstall } from "~/lib/installPwa";
 import { activeUsername, isAdmin } from "~/auth/session";
 import { player } from "~/player/store";
@@ -257,6 +258,7 @@ export default function Settings() {
           {/* Connections */}
           <Show when={tab() === "connections"}>
             <ServerInfo />
+            <DesktopDownloads />
             {/* Updating the deployment is an operator concern — only admins can
                 act on it, so only admins are shown it. */}
             <Show when={isAdmin()}>

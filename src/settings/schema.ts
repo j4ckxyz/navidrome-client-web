@@ -565,7 +565,10 @@ export const DEFAULT_SETTINGS: Settings = {
     crossfadeSeconds: 0,
     gapless: true,
     scrobble: true,
-    replayGain: { mode: "off", preAmpDb: 0 },
+    // Track gain is the safest default for mixed queues/radio: every song aims
+    // at the same perceived loudness. Users can still choose album gain (which
+    // preserves intentional loudness differences) or disable it entirely.
+    replayGain: { mode: "track", preAmpDb: 0 },
     resumeQueueOnLaunch: true,
     maxBitRate: 0,
     equalizer: {

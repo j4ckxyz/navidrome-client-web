@@ -6,6 +6,11 @@ dist
 bun.lockb
 test-results
 playwright-report
+src-tauri/target
+# Generated from the existing web icon by `bun run desktop:icons`. Keeping
+# these binaries out of Git makes PRs text-only and avoids duplicated assets.
+src-tauri/icons
+src-tauri/gen
 
 # Local secrets — never commit real server credentials
 .env
