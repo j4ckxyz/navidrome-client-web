@@ -319,6 +319,9 @@ have.
 `--quiet` suppresses the progress chatter, printing only when something actually
 changed or failed, which keeps a nightly job out of your logs unless it matters.
 
+macOS (launchd) and Windows (Task Scheduler) recipes are in the
+[README](README.md#updating-automatically); the systemd one is repeated here.
+
 **systemd** (put the checkout path in both files):
 
 ```ini

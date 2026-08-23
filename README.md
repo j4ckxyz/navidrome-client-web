@@ -126,6 +126,146 @@ Installing the update is a separate question, because the shipped container deli
 
   > **Understand what this trades away.** Mounting the Docker socket gives the container root-equivalent control of the Docker host. Only do this on a deployment you trust and don't expose publicly. The endpoint additionally requires a caller your server confirms is an admin, and refuses outright unless both mounts are actually present.
 
+### Updating automatically
+
+The best of both: updates happen on their own, and the app gets **no extra privilege**. Your machine already has Docker access — that's what a Docker host is — so let *it* run the updater on a schedule instead of handing that power to a container. This is the same rebuild `SELF_UPDATE` performs, without the socket. (Watchtower, the usual answer for auto-updating containers, needs that same socket, so it doesn't avoid the trade.)
+
+`bun run update` is built for this: it's non-interactive, and it exits without touching anything when you're already current. Add `--quiet` and it prints only when something actually changed or failed, so a nightly job stays out of your logs unless it matters.
+
+First, get the absolute path to `bun` — schedulers run with a minimal `PATH`, so a bare `bun` usually won't resolve:
+
+```bash
+which bun          # macOS / Linux   → e.g. /Users/you/.bun/bin/bun
+where.exe bun      # Windows         → e.g. C:\Users\you\.bun\bin\bun.exe
+```
+
+Substitute that path, and your checkout folder, in whichever recipe fits.
+
+<details>
+<summary><b>Linux</b> — systemd timer</summary>
+
+The right choice on a server: the Docker daemon is a system service, so the job doesn't depend on anyone being logged in.
+
+```ini
+# /etc/systemd/system/tonearm-update.service
+[Unit]
+Description=Update Tonearm
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/tonearm
+ExecStart=/usr/local/bin/bun run update --quiet
+```
+
+```ini
+# /etc/systemd/system/tonearm-update.timer
+[Unit]
+Description=Update Tonearm nightly
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=30m
+Persistent=true      # catch up after the machine was off
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now tonearm-update.timer
+
+systemctl list-timers tonearm-update.timer    # confirm it's scheduled
+sudo systemctl start tonearm-update.service   # run it once now, to test
+journalctl -u tonearm-update.service          # see what it did
+```
+
+Prefer cron? `17 4 * * * cd /srv/tonearm && /usr/local/bin/bun run update --quiet`
+
+</details>
+
+<details>
+<summary><b>macOS</b> — launchd agent</summary>
+
+Use a **LaunchAgent** (not a daemon): Docker Desktop runs as your logged-in user, so a root-level daemon would fire when Docker isn't there to answer.
+
+```xml
+<!-- ~/Library/LaunchAgents/com.tonearm.update.plist -->
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>            <string>com.tonearm.update</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/you/.bun/bin/bun</string>
+    <string>run</string>
+    <string>update</string>
+    <string>--quiet</string>
+  </array>
+  <key>WorkingDirectory</key> <string>/Users/you/tonearm</string>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>   <integer>4</integer>
+    <key>Minute</key> <integer>17</integer>
+  </dict>
+  <key>StandardOutPath</key>  <string>/tmp/tonearm-update.log</string>
+  <key>StandardErrorPath</key><string>/tmp/tonearm-update.log</string>
+</dict>
+</plist>
+```
+
+```bash
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.tonearm.update.plist
+launchctl kickstart -p gui/$(id -u)/com.tonearm.update   # run once now, to test
+cat /tmp/tonearm-update.log                              # see what it did
+```
+
+To remove it: `launchctl bootout gui/$(id -u)/com.tonearm.update`. On macOS 10.10 and older, `launchctl load -w <plist>` instead of `bootstrap`.
+
+If the Mac is asleep at the scheduled time, launchd runs the job once it wakes.
+
+</details>
+
+<details>
+<summary><b>Windows</b> — Task Scheduler</summary>
+
+Run it as your own user: Docker Desktop runs in your session, so "run whether user is logged on or not" would fire with no Docker to talk to.
+
+In PowerShell:
+
+```powershell
+$bun  = "$env:USERPROFILE\.bun\bin\bun.exe"
+$dir  = "$env:USERPROFILE\tonearm"
+
+$action   = New-ScheduledTaskAction -Execute $bun `
+              -Argument "run update --quiet" -WorkingDirectory $dir
+$trigger  = New-ScheduledTaskTrigger -Daily -At 4:17am
+# StartWhenAvailable catches up after the PC was off at the scheduled time.
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
+              -DontStopOnIdleEnd -ExecutionTimeLimit (New-TimeSpan -Hours 1)
+
+Register-ScheduledTask -TaskName "Tonearm update" `
+  -Action $action -Trigger $trigger -Settings $settings
+```
+
+```powershell
+Start-ScheduledTask  -TaskName "Tonearm update"   # run once now, to test
+Get-ScheduledTaskInfo -TaskName "Tonearm update"  # LastRunTime / LastTaskResult (0 = OK)
+```
+
+To remove it: `Unregister-ScheduledTask -TaskName "Tonearm update"`.
+
+</details>
+
+Whichever you use, two things apply:
+
+- **Docker has to be running** when the job fires. On macOS and Windows that means Docker Desktop set to start at login; on Linux the daemon already is a service.
+- **An update restarts the container**, so playback stops and anyone listening has to reload the page. Pick an hour nobody's listening — the examples use 04:17.
+
 
 ### Quick start
 
