@@ -280,16 +280,92 @@ How it behaves:
 
 ### Checking from the app
 
-Admins see an **Updates** card in Settings → Connections. It asks the server for the
-commit this build was made from and compares it against the head of `UPDATE_BRANCH`
-on GitHub, showing how far behind you are and linking to the diff.
+Admins see an **Updates** card in Settings → Connections. It compares what the server
+is running against GitHub, shows how far behind you are, and links to the diff. It
+checks on load and every six hours by default; the toggle is on the card.
 
 The check is read-only and needs no configuration. It caches for 15 minutes and is
 single-flighted, so a busy instance can't burn through GitHub's unauthenticated rate
 limit.
 
+Two identities are compared, because one is often missing:
+
+| | Where it comes from | When it's absent |
+|---|---|---|
+| **Commit** | the `COMMIT_HASH` build arg | a plain `docker compose up --build`, which defaults it to empty — `.git` is excluded from the build context, so the image can't work it out either |
+| **Release version** | `package.json`, copied into the image | never |
+
+If the card says **"Running: unknown"**, the image was built without the build arg.
+The version comparison still works, so the check is accurate either way — and
+`bun run update` always passes the commit, so one run through the updater fixes the
+display permanently. To fix it without updating, rebuild with:
+
+```bash
+COMMIT_HASH=$(git rev-parse HEAD) docker compose up -d --build
+# or just: bun run compose:up
+```
+
 By default the card then shows you the command to run — the shipped container has no
 git checkout and no Docker socket, so it genuinely cannot rebuild itself.
+
+### Scheduled updates (no extra privilege)
+
+The recommended way to keep an instance current. `bun run update` is fully
+non-interactive and exits without touching anything when you're already up to date,
+so it can run on a timer. Crucially the **host** runs it, not the container — so
+nothing needs the Docker socket, and the app gets no privilege it didn't already
+have.
+
+`--quiet` suppresses the progress chatter, printing only when something actually
+changed or failed, which keeps a nightly job out of your logs unless it matters.
+
+**systemd** (put the checkout path in both files):
+
+```ini
+# /etc/systemd/system/tonearm-update.service
+[Unit]
+Description=Update Tonearm
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/tonearm
+ExecStart=/usr/local/bin/bun run update --quiet
+```
+
+```ini
+# /etc/systemd/system/tonearm-update.timer
+[Unit]
+Description=Update Tonearm nightly
+
+[Timer]
+OnCalendar=daily
+# Spread the load off the hour, and catch up after downtime.
+RandomizedDelaySec=30m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now tonearm-update.timer
+systemctl list-timers tonearm-update.timer   # confirm it's scheduled
+sudo systemctl start tonearm-update.service  # run once now to test
+journalctl -u tonearm-update.service         # see what it did
+```
+
+**cron**, if you'd rather:
+
+```cron
+# Nightly at 04:17. Absolute path to bun — cron's PATH is minimal.
+17 4 * * * cd /srv/tonearm && /usr/local/bin/bun run update --quiet
+```
+
+An update rebuilds the image and restarts the container, so playback stops and
+listeners need to reload the page. Schedule it for a time nobody is listening.
 
 ### One-click updates (opt-in)
 

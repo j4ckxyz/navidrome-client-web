@@ -27,6 +27,16 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
 
+// --quiet: say nothing unless something actually changed or went wrong. Meant
+// for a scheduled run, where a nightly "already up to date" in the mail spool
+// or journal is just noise. Errors and real updates always print.
+const QUIET = process.argv.includes("--quiet") || process.argv.includes("-q");
+
+// Progress chatter, suppressed by --quiet.
+function say(...args: unknown[]): void {
+  if (!QUIET) console.log(...args);
+}
+
 // Files that belong to the user's deployment, not the repo source. Preserved
 // verbatim across an update so a pull can never clobber config.
 const CONFIG_FILES = [
@@ -105,7 +115,7 @@ function inspectLabel(container: string, label: string): string {
 // 1. INSPECT — read-only; figure out exactly what we're dealing with
 // ---------------------------------------------------------------------------
 
-console.log("Tonearm updater\n");
+say("Tonearm updater\n");
 
 if (!ok("git", ["rev-parse", "--is-inside-work-tree"])) {
   fail("This folder isn't a git checkout, so there's nothing to update from GitHub.");
@@ -144,21 +154,21 @@ const branch = capture("git", ["symbolic-ref", "--short", "-q", "HEAD"]) || "mai
 // 2. PLAN — print what we found and what we'll do, before changing anything
 // ---------------------------------------------------------------------------
 
-console.log("Detected setup:");
-console.log(`  • Mode:         ${deployment.fullStack ? "full stack (bundled Navidrome)" : "client only"}`);
-console.log(`  • Compose file: ${composeFile}`);
-console.log(`  • Project:      ${deployment.project || "(default — by folder name)"}`);
-console.log(`  • Client:       ${deployment.clientState}`);
+say("Detected setup:");
+say(`  • Mode:         ${deployment.fullStack ? "full stack (bundled Navidrome)" : "client only"}`);
+say(`  • Compose file: ${composeFile}`);
+say(`  • Project:      ${deployment.project || "(default — by folder name)"}`);
+say(`  • Client:       ${deployment.clientState}`);
 if (!deployment.fullStack && containerExists("navidrome")) {
-  console.log('  • Note:         a separate "navidrome" container exists and will NOT be touched.');
+  say('  • Note:         a separate "navidrome" container exists and will NOT be touched.');
 }
-console.log(`  • Branch:       ${branch}\n`);
+say(`  • Branch:       ${branch}\n`);
 
 // ---------------------------------------------------------------------------
 // 3. CHECK GITHUB
 // ---------------------------------------------------------------------------
 
-console.log(`Checking GitHub for updates (origin/${branch})…`);
+say(`Checking GitHub for updates (origin/${branch})…`);
 if (!ok("git", ["fetch", "origin", "--tags", "--prune"])) {
   fail("Could not reach GitHub. Check your network and that 'origin' points at the repo.");
 }
@@ -173,7 +183,7 @@ const builtCommit = inspectLabel(CLIENT_IMAGE, "org.opencontainers.image.revisio
 
 // Nothing to do if we're current, the running image matches HEAD, and it's up.
 if (!updatesAvailable && builtCommit === local && containerRunning(CLIENT_CONTAINER)) {
-  console.log(`\n✓ Already up to date — running the latest version (${short(local)}).`);
+  say(`\n✓ Already up to date — running the latest version (${short(local)}).`);
   process.exit(0);
 }
 
@@ -185,9 +195,9 @@ if (updatesAvailable) {
   console.log(`New version found: ${short(local)} → ${short(remote)}`);
   console.log("Updating source (your docker-compose*.yml and .env are preserved)…");
   updateSource();
-  console.log("Source updated; local config restored.");
+  say("Source updated; local config restored.");
 } else {
-  console.log("Source already current; rebuilding to sync the running container…");
+  say("Source already current; rebuilding to sync the running container…");
 }
 
 // ---------------------------------------------------------------------------
@@ -200,7 +210,7 @@ const composeBase = compose.slice(1); // [] for v1, ["compose"] for v2
 
 const upArgs = [...composeBase, ...projectArgs, "-f", composeFile, "up", "-d", "--build"];
 
-console.log(`\nBuilding and (re)starting with ${composeFile}…`);
+say(`\nBuilding and (re)starting with ${composeFile}…`);
 let buildRes = run(compose[0], upArgs, { env: buildEnv });
 
 if (buildRes.status !== 0) {

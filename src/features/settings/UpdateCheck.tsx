@@ -245,7 +245,7 @@ export function UpdateCheck() {
             <span>
               Install automatically
               <Show when={!canSelfUpdate()}>
-                <span class="muted"> — needs SELF_UPDATE</span>
+                <span class="muted"> — needs SELF_UPDATE; a host timer is the safer route</span>
               </Show>
             </span>
           </label>
@@ -372,9 +372,11 @@ export function UpdateCheck() {
                     </button>
                   </div>
                   <p class="update-note muted">
-                    The app can also do this for you, but only if you let the container reach
-                    Docker — see <code>SELF_UPDATE</code> in DEPLOYMENT.md. That's off by default
-                    because it gives the container control of the Docker host.
+                    To have it happen on its own, run that command from a nightly timer on the
+                    host — it's non-interactive and does nothing when you're already current.
+                    See <em>Scheduled updates</em> in DEPLOYMENT.md. That keeps the app itself
+                    unprivileged, unlike <code>SELF_UPDATE</code>, which can install from this
+                    page but only by giving the container control of the Docker host.
                   </p>
                 </Show>
               </Show>
