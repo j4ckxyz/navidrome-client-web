@@ -1,6 +1,6 @@
 [package]
 name = "tonearm"
-version = "0.2.1"
+version = "0.2.2"
 description = "A fast native desktop client for Navidrome and Jellyfin"
 authors = ["Tonearm contributors"]
 edition = "2021"
