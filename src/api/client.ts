@@ -32,6 +32,7 @@ import type {
   ServerType,
   StreamHandle,
   StreamOptions,
+  UserStats,
 } from "./MusicClient";
 
 // Re-exported for existing importers of these from "~/api/client".
@@ -363,6 +364,41 @@ export class SubsonicClient implements MusicClient {
     return { artistCount, albumCount, songCount, totalSize: undefined };
   }
 
+  // One page of Navidrome's native REST API (/api/album, /api/song, …). This is
+  // the password-login surface: it needs a JWT, which a Subsonic-token session
+  // doesn't have. Every response reissues the token, so it's rolled forward here
+  // rather than at each call site.
+  private async nativeList<T>(
+    resource: string,
+    query: Record<string, string | number>,
+  ): Promise<T[]> {
+    const search = new URLSearchParams();
+    for (const [k, v] of Object.entries(query)) search.set(k, String(v));
+    const url = `${this.creds.serverUrl}/api/${resource}?${search.toString()}`;
+
+    let res: Response;
+    try {
+      res = await fetch(url, { headers: { "x-nd-authorization": `Bearer ${this.creds.jwt}` } });
+    } catch {
+      throw new ApiError(`Network error calling /api/${resource}`);
+    }
+    if (res.status === 401 || res.status === 403) {
+      this.handleAuthError();
+      throw new ApiError("Authentication expired", res.status, true);
+    }
+    if (!res.ok) throw new ApiError(`HTTP ${res.status} calling /api/${resource}`, res.status);
+
+    const refreshed = res.headers.get("x-nd-authorization");
+    if (refreshed) {
+      const token = refreshed.replace(/^Bearer\s+/i, "");
+      this.creds.jwt = token;
+      updateJwt(this.creds.serverUrl, token);
+    }
+
+    const page = (await res.json()) as T[];
+    return Array.isArray(page) ? page : [];
+  }
+
   // Walk Navidrome's native /api/album list, summing songCount and size. Album
   // records are far fewer than tracks, so this is the cheap way to a true total
   // library size. Requires a JWT; each response refreshes it.
@@ -378,30 +414,12 @@ export class SubsonicClient implements MusicClient {
     let totalSize = 0;
 
     for (;;) {
-      const url = `${this.creds.serverUrl}/api/album?_start=${start}&_end=${start + pageSize}&_sort=name`;
-      let res: Response;
-      try {
-        res = await fetch(url, {
-          headers: { "x-nd-authorization": `Bearer ${this.creds.jwt}` },
-        });
-      } catch {
-        throw new ApiError("Network error calling /api/album");
-      }
-      if (res.status === 401 || res.status === 403) {
-        this.handleAuthError();
-        throw new ApiError("Authentication expired", res.status, true);
-      }
-      if (!res.ok) throw new ApiError(`HTTP ${res.status} calling /api/album`, res.status);
-
-      const refreshed = res.headers.get("x-nd-authorization");
-      if (refreshed) {
-        const token = refreshed.replace(/^Bearer\s+/i, "");
-        this.creds.jwt = token;
-        updateJwt(this.creds.serverUrl, token);
-      }
-
-      const page = (await res.json()) as Array<{ songCount?: number; size?: number }>;
-      if (!Array.isArray(page) || page.length === 0) break;
+      const page = await this.nativeList<{ songCount?: number; size?: number }>("album", {
+        _start: start,
+        _end: start + pageSize,
+        _sort: "name",
+      });
+      if (page.length === 0) break;
       for (const al of page) {
         albumCount++;
         songCount += al.songCount ?? 0;
@@ -412,6 +430,156 @@ export class SubsonicClient implements MusicClient {
     }
 
     return { albumCount, songCount, totalSize };
+  }
+
+  // Listening figures for the logged-in user.
+  //
+  // Subsonic has no per-user aggregate at all, so everything below the
+  // favourites comes from Navidrome's native API, which does expose per-track
+  // playCount and playDate — and which needs the JWT a password login provides.
+  // A Subsonic-token session gets favourites and a most-played albums list, and
+  // is told plainly why the rest is missing rather than shown zeroes.
+  async getUserStats(): Promise<UserStats> {
+    const TOP = 8;
+
+    // Favourites and most-played albums work on any login: getStarred2 is one
+    // request for all three kinds, and "frequent" is Subsonic's own most-played
+    // album list (correctly mapped, cover art included).
+    const [starred, frequent] = await Promise.allSettled([
+      this.getStarred(),
+      this.getAlbumList("frequent", { size: TOP }),
+    ]);
+    const base: UserStats = {
+      favoriteSongs: starred.status === "fulfilled" ? starred.value.song.length : undefined,
+      favoriteAlbums: starred.status === "fulfilled" ? starred.value.album.length : undefined,
+      favoriteArtists: starred.status === "fulfilled" ? starred.value.artist.length : undefined,
+      topAlbums: frequent.status === "fulfilled" ? frequent.value : undefined,
+    };
+
+    if (!this.creds.jwt) {
+      return {
+        ...base,
+        unavailableReason:
+          "Play counts need a password (native) login — Navidrome doesn't expose them to Subsonic-token sessions.",
+      };
+    }
+
+    try {
+      return { ...base, ...(await this.nativePlayStats(TOP)) };
+    } catch {
+      // Native API unavailable (older server, or the token was rejected). The
+      // favourites above still stand.
+      return {
+        ...base,
+        unavailableReason: "Navidrome's native API didn't answer, so play counts are unavailable.",
+      };
+    }
+  }
+
+  // Walk /api/song sorted by play count, biggest first, and stop at the first
+  // never-played track: sorted that way, the walk only touches records that
+  // actually contribute, so a large library costs a few pages rather than one
+  // page per thousand tracks. Capped regardless, and the result says when the
+  // cap was what ended it.
+  private async nativePlayStats(top: number): Promise<UserStats> {
+    interface NativeSong {
+      id: string;
+      title?: string;
+      artist?: string;
+      artistId?: string;
+      albumId?: string;
+      duration?: number;
+      playCount?: number;
+      playDate?: string;
+    }
+    const pageSize = 500;
+    const maxPages = 20; // 10k played tracks
+
+    let tracksPlayed = 0;
+    let totalPlays = 0;
+    let listeningSeconds = 0;
+    let approximate = false;
+    const albums = new Set<string>();
+    const artistPlays = new Map<string, { name: string; plays: number }>();
+    let topIds: string[] = [];
+
+    for (let page = 0; ; page++) {
+      if (page >= maxPages) {
+        approximate = true;
+        break;
+      }
+      const rows = await this.nativeList<NativeSong>("song", {
+        _start: page * pageSize,
+        _end: (page + 1) * pageSize,
+        _sort: "playCount",
+        _order: "DESC",
+      });
+      if (rows.length === 0) break;
+      if (page === 0) topIds = rows.filter((r) => (r.playCount ?? 0) > 0).slice(0, top).map((r) => r.id);
+
+      let hitZero = false;
+      for (const row of rows) {
+        const plays = row.playCount ?? 0;
+        if (plays <= 0) {
+          hitZero = true;
+          break;
+        }
+        tracksPlayed++;
+        totalPlays += plays;
+        listeningSeconds += plays * (row.duration ?? 0);
+        if (row.albumId) albums.add(row.albumId);
+        if (row.artistId) {
+          const entry = artistPlays.get(row.artistId) ?? { name: row.artist ?? "", plays: 0 };
+          entry.plays += plays;
+          if (!entry.name && row.artist) entry.name = row.artist;
+          artistPlays.set(row.artistId, entry);
+        }
+      }
+      if (hitZero || rows.length < pageSize) break;
+    }
+
+    // The most recent play is a separate one-row question — the walk above is
+    // ordered by count, not date.
+    let lastPlayed: string | undefined;
+    try {
+      const [recent] = await this.nativeList<NativeSong>("song", {
+        _start: 0,
+        _end: 1,
+        _sort: "playDate",
+        _order: "DESC",
+      });
+      lastPlayed = recent?.playDate;
+    } catch {
+      // Non-fatal: the totals are the point of this call.
+    }
+
+    // Native records carry no cover art id, so read the top tracks back through
+    // the Subsonic API, which returns fully-formed songs. A handful of small
+    // requests, only on this page.
+    const topSongs = (
+      await Promise.all(
+        topIds.map((id) =>
+          this.getSong(id).catch(() => undefined),
+        ),
+      )
+    ).filter((s): s is Song => !!s);
+
+    const topArtists: ArtistSummary[] = [...artistPlays.entries()]
+      .sort((a, b) => b[1].plays - a[1].plays)
+      .slice(0, top)
+      .map(([id, v]) => ({ id, name: v.name || "Unknown artist", playCount: v.plays }));
+
+    return {
+      tracksPlayed,
+      totalPlays,
+      listeningSeconds,
+      albumsPlayed: albums.size,
+      artistsPlayed: artistPlays.size,
+      lastPlayed,
+      topSongs,
+      topArtists,
+      approximate,
+    };
   }
 
   // --- Starred / ratings ---

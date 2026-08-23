@@ -41,6 +41,44 @@ export interface LibraryStats {
   totalSize?: number;
 }
 
+// Per-user listening figures for the Stats page.
+//
+// Every field is optional and the page renders only what it gets. The two
+// backends expose very different amounts here — Jellyfin tracks per-item play
+// counts and dates for each user, Navidrome only exposes the equivalent through
+// its native (password-login) API — and a figure that is silently wrong is worse
+// than one that is plainly absent.
+export interface UserStats {
+  // Distinct tracks played at least once.
+  tracksPlayed?: number;
+  // Every play counted, repeats included.
+  totalPlays?: number;
+  // Time spent listening: plays × track length.
+  listeningSeconds?: number;
+  // Distinct albums / artists with at least one play.
+  albumsPlayed?: number;
+  artistsPlayed?: number;
+  // Favourites, by kind.
+  favoriteSongs?: number;
+  favoriteAlbums?: number;
+  favoriteArtists?: number;
+  // When anything was last played, ISO.
+  lastPlayed?: string;
+  // Leaderboards, already sorted, each carrying its playCount.
+  topSongs?: Song[];
+  topAlbums?: Album[];
+  topArtists?: ArtistSummary[];
+  // True when the totals are a floor, not an exact figure: counting every play
+  // means walking every played track, and that walk is capped so a huge library
+  // can't turn one page view into a request storm. The UI says so rather than
+  // presenting a truncated number as final.
+  approximate?: boolean;
+  // Set when the backend can't report listening figures for this session at all
+  // (a Subsonic-token login has no access to Navidrome's native API), so the UI
+  // can explain the gap instead of showing an empty section.
+  unavailableReason?: string;
+}
+
 export interface ClientOptions {
   onAuthError?: (creds: ServerCredentials) => void;
 }
@@ -173,6 +211,9 @@ export interface MusicClient {
 
   // --- Stats ---
   getLibraryStats(): Promise<LibraryStats>;
+  // Listening figures for the logged-in user. Never rejects on a partial
+  // failure: an unsupported sub-query leaves its field undefined.
+  getUserStats(): Promise<UserStats>;
 
   // --- Starred / ratings ---
   getStarred(): Promise<{ artist: ArtistSummary[]; album: Album[]; song: Song[] }>;

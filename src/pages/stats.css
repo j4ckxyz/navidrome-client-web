@@ -50,3 +50,121 @@
   font-size: 13px;
   max-width: 60ch;
 }
+
+/* Sections stack down the page; the first heading sits tight under the title. */
+.stats-section + .stats-section {
+  margin-top: 36px;
+}
+
+.stats-heading {
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: var(--fw-semibold, 600);
+  letter-spacing: 0.01em;
+}
+
+/* Secondary line under a stat, e.g. "12% of the library". Sits below the label
+   so the number → label pairing stays the thing you read first. */
+.stat-hint {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* --- Most played ---------------------------------------------------------- */
+
+.top-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--gap, 16px);
+  align-items: start;
+}
+
+.top-list {
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.top-list-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: var(--fw-medium, 500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, inherit);
+}
+
+.top-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.top-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.14s var(--ease-out);
+}
+.top-row:hover {
+  background: var(--surface-hover);
+}
+
+.top-rank {
+  flex: 0 0 16px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  opacity: 0.55;
+}
+
+.top-row .cover {
+  flex: 0 0 auto;
+}
+
+/* The text column must be allowed to shrink, or long titles push the play
+   count out of the card instead of ellipsising. */
+.top-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.top-name,
+.top-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-name {
+  font-size: 14px;
+}
+
+.top-sub {
+  font-size: 12px;
+}
+
+.top-plays {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}

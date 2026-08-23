@@ -18,6 +18,20 @@ export function formatLongDuration(seconds: number | undefined): string {
   return `${m} min`;
 }
 
+// Listening totals run into hundreds of hours, where "4,132 hr 6 min" has
+// stopped meaning anything. Switch to days once there are enough of them.
+export function formatListeningTime(seconds: number | undefined): string {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return "0 min";
+  if (seconds < 2 * 86400) return formatLongDuration(seconds);
+  let days = Math.floor(seconds / 86400);
+  let hours = Math.round((seconds - days * 86400) / 3600);
+  if (hours === 24) {
+    days += 1;
+    hours = 0;
+  }
+  return hours ? `${days.toLocaleString()} days ${hours} hr` : `${days.toLocaleString()} days`;
+}
+
 export function formatCount(n: number, noun: string): string {
   return `${n.toLocaleString()} ${noun}${n === 1 ? "" : "s"}`;
 }

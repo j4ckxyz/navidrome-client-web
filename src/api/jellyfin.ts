@@ -50,6 +50,7 @@ import type {
   ServerType,
   StreamHandle,
   StreamOptions,
+  UserStats,
 } from "./MusicClient";
 
 // Jellyfin's BaseItemDto, narrowed to the fields we read.
@@ -1071,6 +1072,179 @@ export class JellyfinClient implements MusicClient {
       // Summing every track's file size would mean pulling MediaSources for the
       // whole library; not worth the request storm for one stat.
       totalSize: undefined,
+    };
+  }
+
+  // Listening figures for the current user.
+  //
+  // Jellyfin keeps play counts and dates per user on every item, so most of this
+  // is a matter of asking the right /Items question and reading
+  // TotalRecordCount — no item bodies come back at all for the counts.
+  //
+  // The one figure that genuinely needs the rows is the *total* play count
+  // (and the listening time derived from it), because that is a sum over
+  // per-item PlayCount values with no server-side aggregate behind it. That walk
+  // is sorted by play count descending and capped, so a library too big to count
+  // in full still yields a number dominated by the tracks that actually matter,
+  // flagged as approximate rather than presented as exact.
+  //
+  // Sub-queries are settled independently: an older server that rejects one sort
+  // or filter leaves that field undefined instead of emptying the page.
+  async getUserStats(): Promise<UserStats> {
+    const PAGE = 500;
+    const MAX_PAGES = 40; // 20k played tracks before we call it approximate
+    const TOP = 8;
+
+    // A count-only query: Limit 0 means Jellyfin returns the total and no items.
+    const countOf = async (
+      path: string,
+      params: Record<string, string | number | undefined>,
+    ): Promise<number> => {
+      const data = await this.get<JfList>(path, params);
+      return data.TotalRecordCount ?? 0;
+    };
+    const countItems = (params: Record<string, string | number | undefined>) =>
+      countOf(
+        "/Items",
+        this.itemParams({ Recursive: "true", Limit: 0, EnableTotalRecordCount: "true", ...params }),
+      );
+    const artistParams = (extra: Record<string, string | number | undefined>) => ({
+      userId: this.userId,
+      ...(this.libraryId ? { ParentId: this.libraryId } : {}),
+      ...extra,
+    });
+
+    // Sum PlayCount (and playtime) over every played track, biggest first.
+    const walkPlays = async (): Promise<{
+      totalPlays: number;
+      listeningSeconds: number;
+      topSongs: Song[];
+      approximate: boolean;
+    }> => {
+      let totalPlays = 0;
+      let listeningSeconds = 0;
+      let topSongs: Song[] = [];
+      let approximate = false;
+
+      for (let page = 0; ; page++) {
+        if (page >= MAX_PAGES) {
+          approximate = true;
+          break;
+        }
+        const data = await this.get<JfList>(
+          "/Items",
+          this.itemParams({
+            IncludeItemTypes: "Audio",
+            Recursive: "true",
+            Filters: "IsPlayed",
+            SortBy: "PlayCount",
+            SortOrder: "Descending",
+            EnableUserData: "true",
+            StartIndex: page * PAGE,
+            Limit: PAGE,
+            ...(page === 0 ? { Fields: SONG_FIELDS } : {}),
+          }),
+        );
+        const items = data.Items ?? [];
+        if (page === 0) topSongs = items.slice(0, TOP).map((i) => this.toSong(i));
+        for (const item of items) {
+          const plays = item.UserData?.PlayCount ?? 0;
+          totalPlays += plays;
+          listeningSeconds += plays * (ticksToSeconds(item.RunTimeTicks) ?? 0);
+        }
+        // Descending by play count: once a page opens on zero, the rest are zero
+        // too, so there is nothing left to add.
+        if (items.length < PAGE) break;
+        if ((items[items.length - 1]?.UserData?.PlayCount ?? 0) === 0) break;
+      }
+      return { totalPlays, listeningSeconds, topSongs, approximate };
+    };
+
+    const results = await Promise.allSettled([
+      countItems({ IncludeItemTypes: "Audio", Filters: "IsPlayed" }),
+      countItems({ IncludeItemTypes: "MusicAlbum", Filters: "IsPlayed" }),
+      countItems({ IncludeItemTypes: "Audio", Filters: "IsFavorite" }),
+      countItems({ IncludeItemTypes: "MusicAlbum", Filters: "IsFavorite" }),
+      countOf(
+        "/Artists/AlbumArtists",
+        artistParams({ Filters: "IsPlayed", Limit: 0, EnableTotalRecordCount: "true" }),
+      ),
+      countOf(
+        "/Artists/AlbumArtists",
+        artistParams({ Filters: "IsFavorite", Limit: 0, EnableTotalRecordCount: "true" }),
+      ),
+      this.get<JfList>(
+        "/Items",
+        this.itemParams({
+          IncludeItemTypes: "MusicAlbum",
+          Recursive: "true",
+          Filters: "IsPlayed",
+          SortBy: "PlayCount",
+          SortOrder: "Descending",
+          EnableUserData: "true",
+          Limit: TOP,
+          Fields: ALBUM_FIELDS,
+        }),
+      ),
+      this.get<JfList>(
+        "/Artists/AlbumArtists",
+        artistParams({
+          SortBy: "PlayCount",
+          SortOrder: "Descending",
+          EnableUserData: "true",
+          Limit: TOP,
+        }),
+      ),
+      this.get<JfList>(
+        "/Items",
+        this.itemParams({
+          IncludeItemTypes: "Audio",
+          Recursive: "true",
+          Filters: "IsPlayed",
+          SortBy: "DatePlayed",
+          SortOrder: "Descending",
+          EnableUserData: "true",
+          Limit: 1,
+        }),
+      ),
+      walkPlays(),
+    ] as const);
+
+    const val = <T>(i: number): T | undefined =>
+      results[i].status === "fulfilled"
+        ? ((results[i] as PromiseFulfilledResult<T>).value)
+        : undefined;
+
+    const topAlbumList = val<JfList>(6);
+    const topArtistList = val<JfList>(7);
+    const lastPlayedList = val<JfList>(8);
+    const walk = val<{
+      totalPlays: number;
+      listeningSeconds: number;
+      topSongs: Song[];
+      approximate: boolean;
+    }>(9);
+
+    return {
+      tracksPlayed: val<number>(0),
+      albumsPlayed: val<number>(1),
+      favoriteSongs: val<number>(2),
+      favoriteAlbums: val<number>(3),
+      artistsPlayed: val<number>(4),
+      favoriteArtists: val<number>(5),
+      topAlbums: topAlbumList?.Items?.map((a) => this.toAlbum(a)),
+      // Some servers ignore a PlayCount sort on the Artists endpoint and answer
+      // in name order; dropping the never-played ones keeps a "most played" list
+      // from being a plain alphabetical list in disguise.
+      topArtists: topArtistList?.Items?.filter((a) => (a.UserData?.PlayCount ?? 0) > 0).map((a) => ({
+        ...this.toArtist(a),
+        playCount: a.UserData?.PlayCount,
+      })),
+      lastPlayed: lastPlayedList?.Items?.[0]?.UserData?.LastPlayedDate,
+      totalPlays: walk?.totalPlays,
+      listeningSeconds: walk?.listeningSeconds,
+      topSongs: walk?.topSongs,
+      approximate: walk?.approximate,
     };
   }
 

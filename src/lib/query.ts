@@ -33,6 +33,7 @@ export const qk = {
   lyrics: (id: string) => ["lyrics", id] as const,
   randomSongs: () => ["randomSongs"] as const,
   libraryStats: () => ["libraryStats"] as const,
+  userStats: () => ["userStats"] as const,
   libraries: () => ["libraries"] as const,
   jellyfinChannels: () => ["jellyfin", "channels"] as const,
   jellyfinMusicVideo: (title: string, artist: string) =>

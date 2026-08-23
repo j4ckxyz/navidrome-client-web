@@ -7,6 +7,8 @@ export interface ArtistSummary {
   coverArt?: string;
   albumCount?: number;
   starred?: string; // ISO date when starred, absent when not
+  // Plays across this artist's tracks, when the backend aggregates it.
+  playCount?: number;
 }
 
 export interface Artist extends ArtistSummary {
