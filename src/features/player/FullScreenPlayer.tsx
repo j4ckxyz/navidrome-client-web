@@ -10,13 +10,18 @@ import { client } from "~/auth/session";
 import { player } from "~/player/store";
 import { remoteTarget } from "~/player/remoteSessions";
 import { DevicePicker } from "./DevicePicker";
-import { qk } from "~/lib/query";
 import { settings, updateSettings } from "~/settings/store";
 import { isStarred, toggleStar } from "~/features/stars";
 import { extractColors, distinctColours } from "~/lib/colorExtract";
 import { hexToRgb, rgbToOklch, oklch } from "~/theme/colors";
 import { artistSlug, closeFullScreen, getReturnPath, rememberReturnPath } from "./fullscreen";
 import { isVisualizerOpen } from "~/features/visualizer/state";
+import {
+  fetchLyrics,
+  lyricsKey,
+  prefetchLyrics,
+  LYRICS_STALE_MS,
+} from "~/features/lyrics/lyricsQuery";
 import { currentMusicVideo, openMusicVideo } from "./musicVideo";
 import { Visualizer } from "./Visualizer";
 import { CoverArt } from "~/ui/CoverArt";
@@ -175,14 +180,23 @@ export function FullScreenPlayer() {
   // Lyrics, loaded quietly in the background. We only ever surface them here if a
   // *synced* set with real timestamps comes back; anything else (failure, none,
   // or plain unsynced text) shows nothing, so the layout never shifts for it.
+  //
+  // Shared with the lyrics side panel, so opening one after the other is
+  // instant — and so this gets the LRCLIB fallback too, which it never used to,
+  // meaning a library with no lyrics tags showed nothing here however many
+  // synced lyrics were a request away.
   const lyricsQ = createQuery(() => ({
-    queryKey: qk.lyrics(song()?.id ?? ""),
-    queryFn: () => client()!.getLyrics(song()!.id),
+    queryKey: lyricsKey(song()?.id ?? ""),
+    queryFn: () => fetchLyrics(song()!),
     enabled: !!client() && !!song(),
-    staleTime: 5 * 60 * 1000,
+    staleTime: LYRICS_STALE_MS,
   }));
+  createEffect(() => {
+    if (!song()) return;
+    prefetchLyrics(player.state.queue[player.state.index + 1]);
+  });
   const syncedLyric = createMemo(() => {
-    const l = (lyricsQ.data ?? []).find((x) => x.synced && x.line.length > 0);
+    const l = (lyricsQ.data?.list ?? []).find((x) => x.synced && x.line.length > 0);
     return l && l.line.some((ln) => ln.start !== undefined) ? l : undefined;
   });
   const activeIdx = createMemo(() => {

@@ -10,15 +10,12 @@ import { createEffect, createMemo, For, Show } from "solid-js";
 import { client } from "~/auth/session";
 import { player } from "~/player/store";
 import { settings } from "~/settings/store";
-import { qk } from "~/lib/query";
-import { fetchLyricsFromLrclib } from "~/features/lyrics/lrclib";
-import type { StructuredLyrics } from "~/api/types";
-
-// Where the words came from, so the panel can credit an external source.
-interface LyricsResult {
-  source: "server" | "lrclib" | null;
-  list: StructuredLyrics[];
-}
+import {
+  fetchLyrics,
+  lyricsKey,
+  prefetchLyrics,
+  LYRICS_STALE_MS,
+} from "~/features/lyrics/lyricsQuery";
 import { Icon } from "~/ui/Icon";
 import "./lyricspanel.css";
 
@@ -26,30 +23,23 @@ export function LyricsPanel() {
   const song = createMemo(() => player.current());
 
   const lyrics = createQuery(() => ({
-    // The online fallback is part of the result, so it belongs in the key:
-    // toggling the setting has to refetch rather than serve the empty answer
-    // cached from before.
-    queryKey: [...qk.lyrics(song()?.id ?? ""), settings.playback.onlineLyrics],
-    queryFn: async (): Promise<LyricsResult> => {
-      const current = song()!;
-      const fromServer = await client()!.getLyrics(current.id).catch(() => []);
-      const usable = fromServer.filter((l) => l.line.length > 0);
-      if (usable.length > 0) return { source: "server", list: usable };
-      if (!settings.playback.onlineLyrics) return { source: null, list: [] };
-      // Radio has no stable identity to look up, and the "track" is whatever
-      // the station happens to be playing.
-      if (current.isRadio) return { source: null, list: [] };
-      const online = await fetchLyricsFromLrclib(current);
-      return online ? { source: "lrclib", list: [online] } : { source: null, list: [] };
-    },
+    queryKey: lyricsKey(song()?.id ?? ""),
+    queryFn: () => fetchLyrics(song()!),
     enabled:
       !!client() &&
       !!song() &&
       settings.layout.showLyricsPanel &&
       !settings.layout.showQueuePanel,
-    // Lyrics for a track don't change; don't re-ask LRCLIB on every toggle.
-    staleTime: 60 * 60_000,
+    staleTime: LYRICS_STALE_MS,
   }));
+
+  // With the panel open, fetch the next track's lyrics before it starts. The
+  // words are then already there when it does, instead of the panel dropping
+  // back to a spinner between songs.
+  createEffect(() => {
+    if (!song()) return;
+    prefetchLyrics(player.state.queue[player.state.index + 1]);
+  });
 
   const best = createMemo(() => {
     const list = lyrics.data?.list ?? [];

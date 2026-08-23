@@ -1541,6 +1541,8 @@ export class JellyfinClient implements MusicClient {
 
   // --- Lyrics -----------------------------------------------------------------
 
+  // Jellyfin answers in one request, so the artist/title hints the Subsonic
+  // client needs are accepted and ignored.
   async getLyrics(id: string): Promise<StructuredLyrics[]> {
     const parse = (lines: { Text: string; Start?: number }[]): StructuredLyrics[] => {
       if (lines.length === 0) return [];

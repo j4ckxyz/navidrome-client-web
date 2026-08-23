@@ -252,7 +252,11 @@ export interface MusicClient {
   movePlaylistItem(id: string, fromIndex: number, toIndex: number): Promise<boolean>;
 
   // --- Lyrics ---
-  getLyrics(id: string): Promise<StructuredLyrics[]>;
+  // `hints` carries the track's artist/title when the caller already has them,
+  // which it almost always does. Subsonic's plain lyrics endpoint is keyed by
+  // artist+title rather than id, so without them the client has to fetch the
+  // song again first — a whole round trip for a fallback that rarely fires.
+  getLyrics(id: string, hints?: { artist?: string; title?: string }): Promise<StructuredLyrics[]>;
 
   // --- Capabilities (let the UI hide features a backend can't do) ---
   // Whether the *server* can bundle a whole album/playlist into one download

@@ -732,30 +732,55 @@ export class SubsonicClient implements MusicClient {
 
   // --- Lyrics ---
 
-  async getLyrics(id: string): Promise<StructuredLyrics[]> {
-    // Prefer OpenSubsonic structured lyrics; fall back to plain getLyrics.
-    try {
-      const data = await this.get<{ lyricsList?: { structuredLyrics?: StructuredLyrics[] } }>(
-        "getLyricsBySongId.view",
-        { id },
-      );
-      const list = data.lyricsList?.structuredLyrics;
-      if (list && list.length > 0) return list;
-    } catch {
-      // ignore and fall through to plain lyrics
-    }
-    try {
-      const song = await this.getSong(id);
-      const data = await this.get<{ lyrics?: { value?: string } }>("getLyrics.view", {
-        artist: song.artist,
-        title: song.title,
-      });
-      const value = data.lyrics?.value;
-      if (value) {
-        return [{ synced: false, line: value.split("\n").map((v) => ({ value: v })) }];
-      }
-    } catch {
-      // no lyrics available
+  // Two endpoints can answer this and they are alternatives, not steps:
+  // OpenSubsonic's structured (often synced) lyrics, and the original plain-text
+  // one. Asking both at once costs one round trip instead of two — which is what
+  // matters here, because the common case in a self-hosted library is that
+  // *neither* has anything and the caller then goes on to ask LRCLIB. Serialising
+  // them made every miss pay for two round trips before that even started.
+  async getLyrics(
+    id: string,
+    hints?: { artist?: string; title?: string },
+  ): Promise<StructuredLyrics[]> {
+    const structured = this.get<{ lyricsList?: { structuredLyrics?: StructuredLyrics[] } }>(
+      "getLyricsBySongId.view",
+      { id },
+    ).catch(() => null);
+
+    // The plain endpoint is keyed by artist+title rather than id. With hints it
+    // costs nothing extra; without them it would mean fetching the song first,
+    // so that lookup is deferred until the structured attempt has actually
+    // failed rather than paid for up front.
+    const plainDirect =
+      hints?.artist && hints?.title
+        ? this.get<{ lyrics?: { value?: string } }>("getLyrics.view", {
+            artist: hints.artist,
+            title: hints.title,
+          }).catch(() => null)
+        : null;
+
+    const [structuredRes, plainRes] = await Promise.all([structured, plainDirect]);
+
+    const list = structuredRes?.lyricsList?.structuredLyrics;
+    if (list && list.length > 0) return list;
+
+    const plain = plainDirect
+      ? plainRes
+      : await (async () => {
+          try {
+            const song = await this.getSong(id);
+            return await this.get<{ lyrics?: { value?: string } }>("getLyrics.view", {
+              artist: song.artist,
+              title: song.title,
+            });
+          } catch {
+            return null;
+          }
+        })();
+
+    const value = plain?.lyrics?.value;
+    if (value) {
+      return [{ synced: false, line: value.split("\n").map((v) => ({ value: v })) }];
     }
     return [];
   }
