@@ -6,6 +6,12 @@
 // `docker compose up --build` doesn't) and the release version from
 // package.json, which is always there. The card leads with whichever it has.
 //
+// Either identity is enough to spot an update. A recorded commit is compared
+// against the branch head directly; without one, the build's own release tag is
+// compared against the branch instead — so commits merged between releases are
+// still reported rather than the card insisting you're current until the next
+// version bump.
+//
 // Whether the update can be *applied* from here depends on the deployment. The
 // shipped container has no git checkout and no Docker socket — deliberately,
 // since mounting the socket grants it root-equivalent control of the host — so
@@ -26,6 +32,9 @@ interface UpdateStatus {
   latestVersion: string;
   behind: number | null;
   updateAvailable: boolean;
+  // "release" — a newer tagged version. "commits" — no new release, but the
+  // branch has moved on, which is most of the time between versions.
+  updateKind?: "release" | "commits";
   publishedAt?: string;
   message?: string;
   compareUrl?: string;
@@ -68,6 +77,19 @@ function identity(s: UpdateStatus): string {
 function latestIdentity(s: UpdateStatus): string {
   if (s.latestVersion) return `v${s.latestVersion}`;
   return short(s.latest) || "unknown";
+}
+
+// What's waiting, said plainly. Changes merged since the last release are the
+// normal case between version bumps, and calling them "v0.2.3 is available"
+// when that's the version already running reads as a bug.
+function availability(s: UpdateStatus): string {
+  const n = s.behind ?? 0;
+  if (s.updateKind === "commits") {
+    const changes = n > 0 ? `${n} change${n === 1 ? "" : "s"}` : "Changes";
+    return ` ${changes} on ${s.branch} since ${identity(s)}, not yet released`;
+  }
+  if (n > 0) return ` ${n} update${n === 1 ? "" : "s"} available`;
+  return ` ${latestIdentity(s)} is available`;
 }
 
 export function UpdateCheck() {
@@ -323,8 +345,16 @@ export function UpdateCheck() {
                 <span class="muted">Latest release</span>
                 <code>{latestIdentity(s())}</code>
               </div>
-              {/* Only worth showing when it adds something the version doesn't. */}
-              <Show when={s().current && s().latest && s().current !== s().latest}>
+              {/* Only worth showing when it adds something the version doesn't:
+                  either this build's commit differs from the branch head, or
+                  there's no commit to compare and the branch has moved past the
+                  release anyway. */}
+              <Show
+                when={
+                  s().latest &&
+                  ((s().current && s().current !== s().latest) || s().updateKind === "commits")
+                }
+              >
                 <div class="update-row">
                   <span class="muted">Latest on {s().branch}</span>
                   <code>{short(s().latest)}</code>
@@ -344,9 +374,7 @@ export function UpdateCheck() {
               <Show when={s().updateAvailable}>
                 <p class="update-note update-available">
                   <Icon name="trending" size={15} />
-                  {s().behind
-                    ? ` ${s().behind} update${s().behind === 1 ? "" : "s"} available`
-                    : ` ${latestIdentity(s())} is available`}
+                  {availability(s())}
                   {s().message ? ` — latest: ${s().message}` : ""}
                 </p>
                 <Show when={s().compareUrl}>

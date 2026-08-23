@@ -280,6 +280,13 @@ interface UpdateStatus {
   latestVersion: string;
   behind: number | null; // commits behind, when GitHub could compare them
   updateAvailable: boolean;
+  // What kind of update is waiting, so the UI can name it honestly:
+  //   "release" — a newer tagged version exists.
+  //   "commits" — no new release, but the branch has moved on. Fixes land
+  //               continuously and releases are cut occasionally, so this is
+  //               the common case between versions, and `bun run update` pulls
+  //               it just the same.
+  updateKind?: "release" | "commits";
   publishedAt?: string;
   message?: string;
   compareUrl?: string;
@@ -333,7 +340,10 @@ async function fetchUpdateStatus(): Promise<UpdateStatus> {
   }
 
   const latest = String(head.sha);
-  const latestVersion = String(release?.tag_name ?? "").replace(/^v/i, "");
+  // The tag exactly as GitHub spells it. Used verbatim when comparing against
+  // it, rather than assuming a "v" prefix this repo happens to use.
+  const releaseTag = String(release?.tag_name ?? "");
+  const latestVersion = releaseTag.replace(/^v/i, "");
   const status: UpdateStatus = {
     ...base,
     latest,
@@ -345,19 +355,46 @@ async function fetchUpdateStatus(): Promise<UpdateStatus> {
 
   if (!current) {
     // No recorded commit — an image built without the build arg, which is what
-    // a plain `docker compose up --build` produces. Fall back to comparing
-    // release versions, which are baked into package.json and always present.
-    if (currentVersion && latestVersion) {
-      const behindByVersion = compareVersions(latestVersion, currentVersion) > 0;
+    // a plain `docker compose up --build` produces. The release version from
+    // package.json is the only identity left, so the comparison is done against
+    // this build's own tag instead of its commit.
+    if (!currentVersion) {
+      return { ...status, updateAvailable: false, error: "This build didn't record its version." };
+    }
+
+    // A newer tagged release is the strongest signal — name it and stop.
+    if (latestVersion && compareVersions(latestVersion, currentVersion) > 0) {
       return {
         ...status,
-        updateAvailable: behindByVersion,
-        compareUrl: behindByVersion
-          ? `https://github.com/${UPDATE_REPO}/compare/v${currentVersion}...v${latestVersion}`
-          : undefined,
+        updateAvailable: true,
+        updateKind: "release",
+        compareUrl: `https://github.com/${UPDATE_REPO}/compare/v${currentVersion}...v${latestVersion}`,
       };
     }
-    return { ...status, updateAvailable: false, error: "This build didn't record its version." };
+
+    // Already on the newest release — which says nothing about the branch.
+    // Releases are cut every so often; fixes and features land continuously, and
+    // `bun run update` moves the checkout to the branch head, not to a tag. So
+    // ask how far ahead of this build's own tag the branch is: that is exactly
+    // what updating would bring in. Without this, a deployment sits on "you're
+    // on the latest version" for every commit merged between releases.
+    const tag = latestVersion === currentVersion && releaseTag ? releaseTag : `v${currentVersion}`;
+    const sinceTag = await ghJson(
+      `/repos/${UPDATE_REPO}/compare/${encodeURIComponent(tag)}...${UPDATE_BRANCH}`,
+    );
+    const ahead = typeof sinceTag?.ahead_by === "number" ? sinceTag.ahead_by : null;
+    if (ahead && ahead > 0) {
+      return {
+        ...status,
+        updateAvailable: true,
+        updateKind: "commits",
+        behind: ahead,
+        compareUrl: `https://github.com/${UPDATE_REPO}/compare/${tag}...${UPDATE_BRANCH}`,
+      };
+    }
+    // Either the branch really is at the tag, or the tag isn't on GitHub (a
+    // fork, or a version never released). Nothing to offer either way.
+    return { ...status, updateAvailable: false };
   }
   if (!status.updateAvailable) return status;
 
@@ -370,6 +407,12 @@ async function fetchUpdateStatus(): Promise<UpdateStatus> {
     // A build from a commit that isn't an ancestor (local edits, another
     // branch) still counts as "there is something newer", just not a count.
     if (cmp.status === "identical") status.updateAvailable = false;
+  }
+  if (status.updateAvailable) {
+    status.updateKind =
+      latestVersion && currentVersion && compareVersions(latestVersion, currentVersion) > 0
+        ? "release"
+        : "commits";
   }
   return status;
 }
