@@ -193,7 +193,10 @@ export default function Settings() {
                   onChange={(v) => updateSettings((s) => (s.playback.gapless = v))}
                 />
               </Row>
-              <Row label="Infinite radio" hint="Keep the queue topped up with similar tracks so playback never ends">
+              <Row
+                label="Infinite radio"
+                hint="When the queue runs out, keep it going with tracks similar to what you chose. Added tracks are marked 'radio' in the queue."
+              >
                 <Toggle
                   label="Infinite radio"
                   checked={settings.playback.autoplay}

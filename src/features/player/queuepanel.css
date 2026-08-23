@@ -188,3 +188,16 @@
   gap: 2px;
   flex: none;
 }
+
+/* Marks a track Infinite radio appended rather than one you queued. */
+.queue-auto-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}

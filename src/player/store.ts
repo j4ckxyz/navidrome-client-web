@@ -12,7 +12,7 @@ import { settings } from "~/settings/store";
 import { proxyMode } from "~/lib/serverConfig";
 import { canPlayContainer } from "~/lib/codecs";
 import { nextRadioBatch } from "~/lib/recommendations";
-import { loadHistory, recordPlay } from "~/features/history/history";
+import { loadHistory, recentlyPlayedIds, recordPlay } from "~/features/history/history";
 import { AudioEngine, type DeckTrack } from "./engine";
 import { socketClient } from "./jellyfinSocket";
 import {
@@ -730,14 +730,14 @@ function createPlayer() {
   // one played and continue. With proactive top-up below this rarely fires; it's
   // the safety net for when a background fetch failed. Stops if nothing's left.
   async function autoplayContinue(): Promise<void> {
-    const seed = current();
+    const seed = radioSeed();
     const c = client();
     if (!seed || !c || seed.isRadio) {
       stop();
       return;
     }
     const at = state.queue.length;
-    const added = await fetchRadioTracks(seed.id, 25);
+    const added = await fetchRadioTracks(seed.id, RADIO_CONTINUE_BATCH);
     if (added === 0) {
       stop();
       return;
@@ -748,9 +748,36 @@ function createPlayer() {
   // Guards against overlapping background fetches when several advances land in
   // quick succession.
   let radioFetching = false;
-  // Top up before the queue empties: once only this many tracks remain after the
-  // current one, fetch more in the background so playback stays seamless.
-  const RADIO_THRESHOLD = 2;
+  // Top up only when the current track is the last one left. Topping up earlier
+  // meant a deliberately-built three-track queue sprouted a dozen tracks the
+  // user never asked for before the first one had finished.
+  const RADIO_THRESHOLD = 1;
+  // How many to append per top-up. Small on purpose: it only has to cover the
+  // gap until the next top-up, and a large batch is what made an intentional
+  // queue balloon into mostly-algorithm.
+  const RADIO_BATCH = 5;
+  // A bigger batch when the queue has genuinely run dry, since playback would
+  // otherwise stop while we fetch.
+  const RADIO_CONTINUE_BATCH = 10;
+
+  // What to base recommendations on.
+  //
+  // The seed must be a track the *user* chose. Seeding from the end of the queue
+  // — which is what this used to do — means that after the first top-up the seed
+  // is itself an algorithmic pick, the next one is a recommendation of a
+  // recommendation, and the queue walks steadily away from whatever you put in
+  // it. Walking back to the last user-chosen track keeps every batch anchored to
+  // real intent no matter how long radio has been running.
+  function radioSeed(): Song | undefined {
+    for (let i = Math.min(state.index, state.queue.length - 1); i >= 0; i--) {
+      const song = state.queue[i];
+      if (song && !song.autoQueued && !song.isRadio) return song;
+    }
+    // Everything in the queue was auto-added (a long radio session that started
+    // from a track since removed) — fall back to what's playing.
+    const playing = current();
+    return playing && !playing.isRadio ? playing : undefined;
+  }
 
   // Proactive radio: if infinite radio is on and the queue is nearly exhausted,
   // append more similar tracks ahead of time. Fire-and-forget; failures are
@@ -759,9 +786,9 @@ function createPlayer() {
     if (!settings.playback.autoplay || radioFetching || state.index < 0) return;
     const remaining = state.queue.length - 1 - state.index;
     if (remaining > RADIO_THRESHOLD) return;
-    const seed = state.queue[state.queue.length - 1];
-    if (!seed || seed.isRadio) return;
-    await fetchRadioTracks(seed.id, 15);
+    const seed = radioSeed();
+    if (!seed) return;
+    await fetchRadioTracks(seed.id, RADIO_BATCH);
   }
 
   // Fetch songs similar to `seedId`, drop ones already queued, apply discovery
@@ -771,8 +798,14 @@ function createPlayer() {
     if (!c) return 0;
     radioFetching = true;
     try {
-      const similar = await c.getSimilarSongs(seedId, count);
-      const fresh = nextRadioBatch(state.queue, similar);
+      // Over-fetch so there's room to discard tracks already queued or recently
+      // played and still end up with `count` of them.
+      const similar = await c.getSimilarSongs(seedId, count * 3);
+      const fresh = nextRadioBatch(state.queue, similar, recentlyPlayedIds())
+        .slice(0, count)
+        // Marked so they never seed the next batch, and so the queue panel can
+        // show which tracks the user didn't pick.
+        .map((song) => ({ ...song, autoQueued: true }));
       if (fresh.length === 0) return 0;
       setState("queue", (q) => [...q, ...fresh]);
       persistQueue();

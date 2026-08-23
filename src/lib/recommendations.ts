@@ -32,9 +32,21 @@ export function buildVibeQueue(seed: Song, similar: Song[]): Song[] {
   return [seed, ...rest];
 }
 
-// The next batch of radio tracks to append: drop anything already in the queue,
-// then apply discovery filters (with the non-empty fallback). Pure.
-export function nextRadioBatch(queue: Song[], similar: Song[]): Song[] {
+// The next batch of radio tracks to append: drop anything already queued or
+// recently played, then apply discovery filters (with the non-empty fallback).
+//
+// Excluding recent plays matters because getSimilarSongs is deterministic for a
+// given seed — without it, every radio session from the same anchor serves the
+// same handful of tracks back, which reads as the queue being stuck. If that
+// filter would leave nothing, queue-position dedupe alone is used, since
+// stalling playback is worse than a repeat.
+export function nextRadioBatch(
+  queue: Song[],
+  similar: Song[],
+  recentlyPlayed: ReadonlySet<string> = new Set(),
+): Song[] {
   const existing = new Set(queue.map((s) => s.id));
-  return pickRecommendations(similar.filter((s) => !existing.has(s.id)));
+  const notQueued = similar.filter((s) => !existing.has(s.id));
+  const unheard = notQueued.filter((s) => !recentlyPlayed.has(s.id));
+  return pickRecommendations(unheard.length > 0 ? unheard : notQueued);
 }

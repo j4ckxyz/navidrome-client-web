@@ -102,6 +102,18 @@ export function recordPlay(song: Song): void {
   persist(next);
 }
 
+// Ids played recently, so radio doesn't keep serving back the same tracks
+// session after session. Bounded because it's only used to filter a batch of a
+// few dozen candidates.
+export function recentlyPlayedIds(limit = 150): Set<string> {
+  const out = new Set<string>();
+  for (const entry of entries()) {
+    out.add(entry.id);
+    if (out.size >= limit) break;
+  }
+  return out;
+}
+
 export function clearHistory(): void {
   setEntries([]);
   const k = key();

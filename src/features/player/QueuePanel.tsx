@@ -178,7 +178,15 @@ export function QueuePanel() {
                     <span class="queue-title" classList={{ "accent-text": real() === player.state.index }}>
                       {song.title}
                     </span>
-                    <span class="queue-artist muted">{song.artist}</span>
+                    <span class="queue-artist muted">
+                      {song.artist}
+                      {/* Say which tracks you didn't pick. Infinite radio
+                          appends to the queue silently, and unlabelled it just
+                          looks like the player choosing songs at random. */}
+                      <Show when={song.autoQueued}>
+                        <span class="queue-auto-tag" title="Added by Infinite radio">radio</span>
+                      </Show>
+                    </span>
                   </div>
                   <span class="queue-dur muted">{formatDuration(song.duration)}</span>
                   <Show when={!remoteTarget()}>

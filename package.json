@@ -12,6 +12,7 @@
     "test:e2e": "playwright test",
     "test:remote": "bun --conditions=browser run harness/remote.harness.ts",
     "test:lyrics": "bun --conditions=browser run harness/lrclib.test.ts",
+    "test:radio": "bun --conditions=browser run harness/radio.test.ts",
     "test:live": "bun --conditions=browser --env-file=.env run harness/live.ts",
     "test:live:target": "bun --conditions=browser --env-file=.env run harness/live-target.ts",
     "test:live:control": "bun --conditions=browser --env-file=.env run harness/live-control.ts",

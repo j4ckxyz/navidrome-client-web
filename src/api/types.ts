@@ -83,6 +83,11 @@ export interface Song {
   isRadio?: boolean;
   // Absolute artwork URL for external sources (Navidrome tracks use coverArt).
   artworkUrl?: string;
+  // Client-only. Set on tracks appended by Infinite radio rather than chosen by
+  // the user, so the UI can mark them and — crucially — so they are never used
+  // to seed the next batch. Seeding from an auto-added track makes each round
+  // of recommendations drift further from what you actually queued.
+  autoQueued?: boolean;
 }
 
 export interface Genre {
