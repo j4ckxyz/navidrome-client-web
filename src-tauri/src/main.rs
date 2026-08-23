@@ -59,7 +59,11 @@ fn main() {
         .invoke_handler(tauri::generate_handler![set_app_icon])
         .setup(|app| {
             use tauri::menu::{Menu, MenuItemBuilder, SubmenuBuilder};
-            #[cfg(any(target_os = "macos", target_os = "windows"))]
+            // Every platform calls get_webview_window somewhere in this closure
+            // — Linux for `--update`, macOS for vibrancy, Windows for Mica — so
+            // the trait must be in scope unconditionally. Gating it on
+            // macos/windows broke the Linux build, and only the Linux build,
+            // which is why release runs failed on AppImage alone.
             use tauri::Manager;
 
             // AppImage users can update without opening the WebView:
