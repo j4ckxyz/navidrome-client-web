@@ -1,128 +1,65 @@
-# Deployment Guide
+# Deployment
 
-This guide covers every way to run the Navidrome web client. It is written to be
-followed step-by-step by a person **or** an automated agent. Each scenario lists
-the exact files, environment variables, commands, and verification checks.
+Everything beyond the quick start in the [README](README.md). Jump to what you
+need — you don't have to read this top to bottom.
 
----
+- [The one setting that matters](#the-one-setting-that-matters)
+- [All the settings](#all-the-settings)
+- [Uploading music](#uploading-music)
+- [Hosting for other people](#hosting-for-other-people)
+- [Link previews](#link-previews)
+- [Updating](#updating)
+- [Something's wrong](#somethings-wrong)
 
-## Concepts (read this first)
+## The one setting that matters
 
-The Docker image is a small [Bun](https://bun.sh) HTTP server (`server/index.ts`)
-that serves the built web app and, optionally, proxies API calls to Navidrome.
-It has exactly **two modes**, decided by one variable:
+Tonearm ships as a small web server in a Docker container. `NAVIDROME_URL`
+decides how it behaves, and everything else follows from it.
 
-| Mode | Condition | What happens | CORS? | Uploads possible? |
-|------|-----------|--------------|-------|-------------------|
-| **Proxy** | `NAVIDROME_URL` is set | The server forwards `/rest/*`, `/auth/*`, `/api/*`, and `/upload` to that one Navidrome server. The browser only talks to this app. | No — same origin | Yes, if `MUSIC_DIR` is also mounted |
-| **Direct** | `NAVIDROME_URL` is empty | No proxy. Each user types their **own** Navidrome URL at login; the browser talks to it directly. | Yes — each user's server must allow this origin | **Never** |
+**If you set it** ("proxy mode") — Tonearm passes requests through to that one
+server. Your browser only ever talks to Tonearm, so there's nothing to configure
+about cross-origin requests, and uploads become possible.
 
-**Rule of thumb:**
-- Hosting one client for **many people who each own a different Navidrome** → **Direct mode**.
-- Running it for **yourself/your household against one server you control**, and you want browser uploads → **Proxy mode with `MUSIC_DIR`**.
+**If you leave it empty** ("direct mode") — Tonearm doesn't touch your music
+server at all. Each person types their own server URL when they log in, and their
+browser talks to it directly. This is how you host one site for lots of people.
+Uploads are impossible here by design.
 
-### Environment variables
+Jellyfin always connects directly, whichever mode you're in.
 
-| Variable | Default | Notes |
-|----------|---------|-------|
-| `NAVIDROME_URL` | _(empty)_ | e.g. `http://navidrome:4533` (same compose network) or `http://host.docker.internal:4533` (same host, Docker Desktop). Empty selects direct mode. |
-| `MUSIC_DIR` | _(empty — uploads off)_ | Path **inside the container**. Only matters in proxy mode. Set it (e.g. `/music`) **and** mount that path to the folder Navidrome scans to enable uploads. Empty keeps uploads off. |
-| `NAVIDROME_OG_USER` / `NAVIDROME_OG_PASS` | _(empty — previews off)_ | A **read-only** Navidrome account. Only matters in proxy mode. When both are set, shared links (`/album/:id`, `/playlist/:id`, `/artist/:id`) render rich OpenGraph/Twitter/Bluesky previews for crawlers. Empty keeps previews off. See [Link previews](#link-previews). |
-| `PORT` | `8080` | Listen port inside the container. |
-| `UPDATE_REPO` | `j4ckxyz/navidrome-client-web` | Repo the update check compares against. Point at your fork if you run one. |
-| `UPDATE_BRANCH` | `main` | Branch the update check follows. |
-| `SELF_UPDATE` | _(empty — off)_ | `1` lets admins apply updates from Settings. Needs the git checkout and the Docker socket mounted too; see [Updating](#updating). Off by default. |
-| `REPO_DIR` | `/repo` | Where the git checkout is mounted when `SELF_UPDATE` is on. |
-| `JELLYFIN_URL` | _(empty)_ | Jellyfin server used to confirm a caller is an admin. Only needed for `SELF_UPDATE` when Jellyfin is the backend. |
+## All the settings
 
-The image exposes `8080`; the compose files map host `8680 → 8080`.
+Set these as environment variables in `docker-compose.yml` or on the command
+line. Every one is optional.
 
----
+| Setting | What it does |
+|---|---|
+| `NAVIDROME_URL` | Your Navidrome server, e.g. `http://navidrome:4533`. Empty means everyone brings their own. |
+| `MUSIC_DIR` | Turns on browser uploads. See [Uploading music](#uploading-music). |
+| `PORT` | Port inside the container. Default `8080`; the compose files publish it on `8680`. |
+| `NAVIDROME_OG_USER` / `NAVIDROME_OG_PASS` | A read-only account used for [link previews](#link-previews). |
+| `SELF_UPDATE` | Set to `1` to let admins install updates from the Settings page. See [Updating](#updating). |
+| `JELLYFIN_URL` | Only needed with `SELF_UPDATE` when Jellyfin is your server — used to check the person clicking is an admin. |
+| `UPDATE_REPO` / `UPDATE_BRANCH` | Change these if you run your own fork. |
+| `REPO_DIR` | Where your checkout is mounted for `SELF_UPDATE`. Default `/repo`. |
 
-## Scenario A — Public client, users bring their own server
+To check what's actually switched on:
 
-**Goal:** one URL anyone can visit and log into **their own** Navidrome.
-Uploads are intentionally impossible here (the host has no access to users' music).
-
-1. Use `docker-compose.yml` and **leave `NAVIDROME_URL` empty** (the default).
-   You do **not** need the music volume; remove or ignore it.
-
-   ```bash
-   bun run compose:up
-   ```
-
-   Or by hand:
-
-   ```bash
-   docker run -d -p 8680:8080 --name tonearm tonearm
-   ```
-
-2. Users open the site and enter their **own** server URL, username, and password.
-
-3. <a id="direct-mode-cors"></a>**CORS (only relevant in direct mode).** Because the browser calls each
-   user's Navidrome directly, that server must allow this app's origin, or the
-   browser blocks the request (login appears to fail even with correct creds).
-   Each user (or you, per server) handles this one of two ways:
-
-   **Option 1 — Same origin via reverse proxy (most robust, no CORS at all).**
-   Serve the app and Navidrome under the same scheme+host+port:
-
-   ```nginx
-   server {
-       server_name music.example.com;
-       location /        { proxy_pass http://tonearm:8080; }
-       location /rest/   { proxy_pass http://navidrome:4533; }
-       location /auth/   { proxy_pass http://navidrome:4533; }
-       location /api/    { proxy_pass http://navidrome:4533; }
-       location /share/  { proxy_pass http://navidrome:4533; }
-   }
-   ```
-   Then users enter the **same URL they're viewing the app from** as the server URL.
-
-   **Option 2 — Allow the origin on Navidrome.** Add these response headers
-   (via Navidrome's reverse proxy) and make `OPTIONS` preflights return `204`:
-
-   ```
-   Access-Control-Allow-Origin: https://your-client-origin.example.com
-   Access-Control-Allow-Headers: Content-Type, x-nd-authorization, x-nd-client-unique-id
-   Access-Control-Allow-Methods: GET, POST, OPTIONS
-   ```
-
-**Verify:**
 ```bash
 curl -s http://localhost:8680/api/config
-# expect: {"proxyMode":false,"uploadEnabled":false,"version":"..."}
 ```
 
----
+## Uploading music
 
-## Scenario B — Same device as Navidrome, with uploads
+Admins get an upload button in the sidebar that accepts files, whole folders, or
+a ZIP. It writes them into your library and tells Navidrome to scan.
 
-**Goal:** personal/household setup where admins can drag music into the browser.
-This is the recommended setup — it unlocks every feature and needs no CORS.
+It's off until you do all three of these:
 
-### B1. All-in-one (also runs Navidrome for you)
-
-Uses `docker-compose.full.yml`, which starts Navidrome **and** the client sharing
-one music folder.
-
-1. Point it at your library and start it:
-
-   ```bash
-   COMMIT_HASH=$(git rev-parse HEAD) MUSIC_HOST_DIR=/path/to/your/music docker compose -f docker-compose.full.yml up -d
-   ```
-
-2. Open `http://localhost:8680`. On first login, create your admin account.
-
-3. As an admin you'll see an **upload button** in the sidebar footer. Drop in
-   audio files, a whole folder, or a `.zip`; they're written into the library and
-   a scan runs automatically.
-
-### B2. Alongside an existing Navidrome on the same host
-
-Uses `docker-compose.yml`. Mount the **same folder your existing Navidrome scans**.
-First **uncomment the `volumes:` lines** in `docker-compose.yml`, then start it with
-all three variables set (the `MUSIC_DIR` env is what actually switches uploads on):
+1. Set `NAVIDROME_URL` (uploads only work in proxy mode).
+2. Set `MUSIC_DIR=/music`.
+3. Mount your music folder at that same path, by uncommenting the `volumes:`
+   lines in `docker-compose.yml`.
 
 ```bash
 NAVIDROME_URL=http://host.docker.internal:4533 \
@@ -131,323 +68,151 @@ MUSIC_HOST_DIR=/path/to/your/music \
 bun run compose:up
 ```
 
-> `host.docker.internal` resolves to the host from inside the container on Docker
-> Desktop (macOS/Windows). On Linux, either add
-> `--add-host=host.docker.internal:host-gateway`, use the host's LAN IP, or put
-> both services on the same Docker network and use the service name.
+**The folder has to be the one Navidrome scans.** If the paths differ, uploads
+land somewhere Navidrome never looks and nothing appears.
 
-**Critical:** `MUSIC_DIR` inside the container must map to the **exact directory
-Navidrome reads**. The client writes files there; Navidrome then scans them. If
-the paths differ, uploads land somewhere Navidrome never looks.
+Check it worked — `uploadEnabled` should be `true`:
 
-**Verify the full chain:**
-```bash
-# 1. Upload is advertised as enabled
-curl -s http://localhost:8680/api/config
-# expect: {"proxyMode":true,"uploadEnabled":true,...}
-
-# 2. Proxy reaches Navidrome (auth error is fine — it proves connectivity)
-curl -s "http://localhost:8680/rest/ping.view?f=json"
-# expect a {"subsonic-response":...} envelope
-
-# 3. Non-admin / unauthenticated uploads are rejected
-curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8680/upload
-# expect: 403
-```
-
----
-
-## Scenario C — Separate machines/containers, no uploads
-
-**Goal:** run the client somewhere other than Navidrome (different server, VM, or
-just a separate container) and avoid CORS, but you don't need uploads.
-
-Use proxy mode and simply **don't mount a music volume**:
-
-```bash
-NAVIDROME_URL=https://navidrome.example.com bun run compose:up
-```
-
-By hand:
-```bash
-docker run -d -p 8680:8080 \
-  -e NAVIDROME_URL=https://navidrome.example.com \
-  --name tonearm tonearm
-```
-
-Because `NAVIDROME_URL` is set, there's no CORS to deal with. Because no music
-folder is mounted, `uploadEnabled` is `false` and the upload UI/endpoint stay off.
-
-**Verify:**
 ```bash
 curl -s http://localhost:8680/api/config
-# expect: {"proxyMode":true,"uploadEnabled":false,...}
 ```
 
----
+Uploading also requires being an admin on your music server; Tonearm asks the
+server before writing anything, so a public deployment can't be used to dump
+files on your disk.
 
-## How uploads work (and why they're safe to expose)
+Accepts `mp3, flac, ogg, opus, m4a, aac, wav, wv, ape, mpc, wma, aiff, aif, dsf,
+dff`, and ZIPs of them.
 
-When a request hits `POST /upload`, the server:
+## Hosting for other people
 
-1. Refuses immediately unless `MUSIC_DIR` **and** `NAVIDROME_URL` are configured.
-2. Verifies the caller is an **admin** by asking the proxied Navidrome
-   (`/api/user` via JWT, or Subsonic `getUser.view` → `adminRole`). Non-admins get `403`.
-3. Writes audio files into `MUSIC_DIR`, preserving folder structure. For a `.zip`,
-   it extracts only audio entries and skips junk (`__MACOSX`, dotfiles). Path
-   traversal (`../`) is rejected.
-4. Triggers a Navidrome rescan so new tracks appear.
+Leave `NAVIDROME_URL` empty and each person enters their own server at login.
 
-The admin check runs **before** the upload body is parsed, so unauthorized callers
-can't push large payloads. All three gates (operator mounts `MUSIC_DIR`, server
-confirms admin, direct mode disables the route) must pass — which is why a public
-direct-mode deployment can't be used to write files.
+The catch: browsers block a page on your domain from calling a server on someone
+else's domain unless that server says it's allowed. Without this, logging in just
+fails even with the right password. There are two ways to solve it.
 
-Supported audio extensions: `mp3, flac, ogg, opus, m4a, aac, wav, wv, ape, mpc,
-wma, aiff, aif, dsf, dff`, plus `.zip` archives of them.
+**Option 1 — put both behind one address (no CORS at all).** If you control both,
+serve them from the same hostname:
 
----
+```nginx
+server {
+    server_name music.example.com;
+    location /       { proxy_pass http://tonearm:8080; }
+    location /rest/  { proxy_pass http://navidrome:4533; }
+    location /auth/  { proxy_pass http://navidrome:4533; }
+    location /api/   { proxy_pass http://navidrome:4533; }
+    location /share/ { proxy_pass http://navidrome:4533; }
+}
+```
 
-## Custom playlist covers
+People then enter the same address they're already looking at.
 
-From a playlist's detail page you can upload a custom cover photo (hover the cover
-→ **Cover photo**, or the "…" menu). This uses Navidrome's native
-`POST /api/playlist/{id}/image` endpoint, so the image is stored **on the server**
-and syncs to every client — including Navidrome's own UI.
+**Option 2 — let the music server allow your site.** Each person adds these
+headers to their Navidrome, and makes `OPTIONS` requests return `204`:
 
-- Requires a **password (native) login**; Subsonic-token-only logins don't get a
-  JWT, so the button is hidden for them.
-- Requires **edit permission** on the playlist (owner or admin); otherwise the
-  server returns `403` and the client shows a message.
-- Accepts JPEG, PNG, GIF, or WebP.
-- Works in both proxy and direct mode (in direct mode the target server must allow
-  this origin via CORS, like every other API call).
+```
+Access-Control-Allow-Origin: https://your-site.example.com
+Access-Control-Allow-Headers: Content-Type, x-nd-authorization, x-nd-client-unique-id
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+```
 
----
-
-## Downloads
-
-Albums, playlists, and individual songs have a **Download…** action (the "…" menu
-or right-click on a track). You pick a quality:
-
-- **Original** — the untranscoded source files. A song downloads its file; an
-  album/playlist downloads a ZIP that **Navidrome** assembles. Works in **any**
-  mode (proxy or direct).
-- **Opus 192k / MP3 320k / MP3 128k** — transcoded by Navidrome's transcoder.
-  - A **single song** transcodes and downloads anywhere.
-  - A whole **album/playlist** is transcoded and zipped by this app's backend
-    (`POST /download/zip`), so it streams to disk without buffering. This needs
-    **proxy mode** (`NAVIDROME_URL` set); in direct mode only Original is offered.
-
-Files are named sensibly (`01 Title.opus` inside `Artist - Album.zip`). Lossy
-formats must be enabled in Navidrome's transcoding settings (the defaults cover
-Opus and MP3).
-
----
+Jellyfin needs [the same thing](https://jellyfin.org/docs/general/networking/).
 
 ## Link previews
 
-<a id="link-previews"></a>When someone shares a link to an album, playlist, or
-artist, crawlers (Twitter/X, Discord, Slack, Facebook, Bluesky, Mastodon, …) can
-show a rich card with the cover art and a proper title — rendered **server-side**
-so it works without JavaScript.
+When someone shares a link to an album, playlist or artist, this makes Discord,
+Slack, Bluesky and the rest show the cover art and title instead of a bare URL.
 
-**Enable it (proxy mode only):**
+Proxy mode only. Create a **read-only** (non-admin) account on your Navidrome,
+then set:
 
-1. In Navidrome, create a dedicated **read-only** user (any non-admin account).
-2. Set `NAVIDROME_OG_USER` and `NAVIDROME_OG_PASS` to that account.
-
-```bash
-# verify it's on
-curl -s http://localhost:8680/api/config
-# expect: {"proxyMode":true,...,"linkPreviews":true,...}
+```
+NAVIDROME_OG_USER=preview
+NAVIDROME_OG_PASS=...
 ```
 
-How it behaves:
-
-- **Crawlers** requesting `/album/:id` etc. get an `index.html` with `og:*` /
-  `twitter:*` tags. The cover is served via a public `/og/cover/:id` proxy (it
-  fetches with the read-only account, so anonymous crawlers can load the image).
-- **Humans** still get the normal app and the **login screen** — previews never
-  expose playback or bypass auth; they only reveal a title and cover for whatever
-  ID is in the link.
-- With the variables empty, the server behaves exactly as before (plain shell,
-  generic `Navidrome` title).
-
----
+Only the title and cover for whatever's in the link are exposed — people still
+hit the login screen as normal.
 
 ## Updating
 
-### Checking from the app
+### The normal way
 
-Admins see an **Updates** card in Settings → Connections. It compares what the server
-is running against GitHub, shows how far behind you are, and links to the diff. It
-checks on load and every six hours by default; the toggle is on the card.
-
-The check is read-only and needs no configuration. It caches for 15 minutes and is
-single-flighted, so a busy instance can't burn through GitHub's unauthenticated rate
-limit.
-
-Two identities are compared, because one is often missing:
-
-| | Where it comes from | When it's absent |
-|---|---|---|
-| **Commit** | the `COMMIT_HASH` build arg | a plain `docker compose up --build`, which defaults it to empty — `.git` is excluded from the build context, so the image can't work it out either |
-| **Release version** | `package.json`, copied into the image | never |
-
-If the card says **"Running: unknown"**, the image was built without the build arg.
-The version comparison still works, so the check is accurate either way — and
-`bun run update` always passes the commit, so one run through the updater fixes the
-display permanently. To fix it without updating, rebuild with:
-
-```bash
-COMMIT_HASH=$(git rev-parse HEAD) docker compose up -d --build
-# or just: bun run compose:up
-```
-
-By default the card then shows you the command to run — the shipped container has no
-git checkout and no Docker socket, so it genuinely cannot rebuild itself.
-
-### Scheduled updates (no extra privilege)
-
-The recommended way to keep an instance current. `bun run update` is fully
-non-interactive and exits without touching anything when you're already up to date,
-so it can run on a timer. Crucially the **host** runs it, not the container — so
-nothing needs the Docker socket, and the app gets no privilege it didn't already
-have.
-
-`--quiet` suppresses the progress chatter, printing only when something actually
-changed or failed, which keeps a nightly job out of your logs unless it matters.
-
-macOS (launchd) and Windows (Task Scheduler) recipes are in the
-[README](README.md#updating-automatically); the systemd one is repeated here.
-
-**systemd** (put the checkout path in both files):
-
-```ini
-# /etc/systemd/system/tonearm-update.service
-[Unit]
-Description=Update Tonearm
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-WorkingDirectory=/srv/tonearm
-ExecStart=/usr/local/bin/bun run update --quiet
-```
-
-```ini
-# /etc/systemd/system/tonearm-update.timer
-[Unit]
-Description=Update Tonearm nightly
-
-[Timer]
-OnCalendar=daily
-# Spread the load off the hour, and catch up after downtime.
-RandomizedDelaySec=30m
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now tonearm-update.timer
-systemctl list-timers tonearm-update.timer   # confirm it's scheduled
-sudo systemctl start tonearm-update.service  # run once now to test
-journalctl -u tonearm-update.service         # see what it did
-```
-
-**cron**, if you'd rather:
-
-```cron
-# Nightly at 04:17. Absolute path to bun — cron's PATH is minimal.
-17 4 * * * cd /srv/tonearm && /usr/local/bin/bun run update --quiet
-```
-
-An update rebuilds the image and restarts the container, so playback stops and
-listeners need to reload the page. Schedule it for a time nobody is listening.
-
-### One-click updates (opt-in)
-
-To let the button do it for you, give the container what the updater needs and turn
-the flag on:
-
-```yaml
-services:
-  tonearm:
-    environment:
-      SELF_UPDATE: "1"
-      # Only needed when Jellyfin is the backend — used to confirm the caller is
-      # a Jellyfin administrator before running anything.
-      JELLYFIN_URL: http://jellyfin:8096
-    volumes:
-      - .:/repo                                   # the checkout, including .git
-      - /var/run/docker.sock:/var/run/docker.sock # so it can rebuild itself
-```
-
-> **Weigh this up before enabling it.** Mounting the Docker socket gives the
-> container root-equivalent control of the Docker host — that is the price of a
-> container rebuilding itself, and it's why this is off by default. Enable it only on
-> a deployment you trust, and don't expose such an instance publicly.
-
-The endpoint is defended three ways regardless: it's inert unless `SELF_UPDATE` is
-set, it requires a caller your configured server confirms is an **admin**, and it
-refuses if the checkout or Docker aren't actually reachable. The command it runs is a
-fixed argv (`bun run scripts/update.ts`) with no shell and nothing from the request
-in it.
-
-Applying an update restarts the container, so the request is usually cut off
-mid-flight; the UI expects that and re-checks the version once it's back.
-
-### From the command line
-
-From a git checkout of this repo, run:
+From the folder you installed to:
 
 ```bash
 bun run update
 ```
 
-It works in three safe steps:
+It reads the compose setup that actually created your running container, so it
+rebuilds *your* deployment and can't disturb a Navidrome you run separately. Your
+`docker-compose.yml` and `.env` are left exactly as they are. Run it whenever —
+if you're already current it exits without doing anything.
 
-1. **Inspects your setup first** and prints a plan before changing anything. It reads
-   the exact Compose project and compose file that created your running `tonearm`
-   container, so it always rebuilds *your* deployment — full stack or client-only —
-   rather than guessing.
-2. **Updates the source** from GitHub (`origin`) if there's a newer version,
-   **without touching your local `docker-compose*.yml` or `.env`** files.
-3. **Rebuilds in place** with `up -d --build` against your own project only.
+By hand, the equivalent is:
 
-Because it only ever acts on the project that owns `tonearm` and never removes
-a `navidrome` container, it **cannot touch a Navidrome you run separately**, and the
-"container name already in use" conflict is impossible. The command is cross-platform
-(Windows, macOS, Linux) and supports Docker Compose v2 (`docker compose`) and v1
-(`docker-compose`). It's safe to re-run: if you're already on the latest commit and
-the container matches, it exits without rebuilding.
+```bash
+git pull
+bun run compose:up
+```
 
----
+### Checking from the app
 
-## Troubleshooting
+Admins see an **Updates** card in Settings → Connections. It compares what you're
+running against GitHub and links to what changed. It checks on load and every six
+hours; both are toggles on the card.
 
-| Symptom | Likely cause | Fix |
-|---------|--------------|-----|
-| Login fails in direct mode, creds are correct | CORS not configured on the target Navidrome | See [CORS](#direct-mode-cors), or switch to proxy mode |
-| No upload button as an admin | Not in proxy mode, or `MUSIC_DIR` not mounted | `curl /api/config` — need `uploadEnabled:true`; mount the music volume + set `NAVIDROME_URL` |
-| Upload succeeds but tracks don't appear | `MUSIC_DIR` ≠ the folder Navidrome scans, or scan disabled | Make both mounts point at the same host folder; check Navidrome logs / trigger a manual scan |
-| `POST /upload` returns `403` | Caller isn't an admin on the proxied server | Log in as an admin of that Navidrome |
-| `POST /upload` returns `503` | `MUSIC_DIR`/`NAVIDROME_URL` not set | You're in direct mode or didn't mount music — uploads are off by design |
-| `docker compose` can't pull images on macOS | Docker Desktop credential helper not on `PATH` | `export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"` |
+It notices two different things: a new release, and changes merged since the
+release you're on. The second is the normal case between version bumps, and
+`bun run update` installs either.
 
----
+### On a schedule
 
-## File reference
+See [docs/scheduled-updates.md](docs/scheduled-updates.md) for ready-made recipes
+for Linux, macOS and Windows. Letting your own machine run the updater on a timer
+is safer than the one-click option below, because Tonearm gains no extra power.
+
+Note that an update restarts the container, so anyone listening will need to
+reload the page. Pick a quiet hour.
+
+### One-click updates from Settings (optional)
+
+Add to `docker-compose.yml`:
+
+```yaml
+environment:
+  SELF_UPDATE: "1"
+volumes:
+  - .:/repo
+  - /var/run/docker.sock:/var/run/docker.sock
+```
+
+> **Know what this costs.** Mounting the Docker socket gives the container
+> root-level control of the machine it's running on. Only do this on a private
+> deployment you trust. Tonearm still requires the person clicking to be an admin
+> on your music server, and refuses if the mounts aren't really there. Watchtower
+> and similar tools need the same socket, so they aren't a way around it — a
+> scheduled `bun run update` on the host is.
+
+## Something's wrong
+
+| What you see | Why | Fix |
+|---|---|---|
+| Login fails, password is definitely right | Direct mode, and the music server isn't allowing your site | [Hosting for other people](#hosting-for-other-people), or set `NAVIDROME_URL` |
+| No upload button, and I am an admin | Not in proxy mode, or music isn't mounted | `curl /api/config` — you need `uploadEnabled:true` |
+| Upload works but tracks never appear | `MUSIC_DIR` isn't the folder Navidrome scans | Point both at the same host folder, then rescan |
+| Upload returns `403` | You aren't an admin on the music server | Log in as one |
+| Upload returns `503` | Uploads are off | Set `NAVIDROME_URL` **and** `MUSIC_DIR`, and mount the folder |
+| Updates card says "Running: unknown" | Image built without recording its version | Harmless — updates are still detected. `bun run update` fixes it |
+| `docker compose` can't pull images on macOS | Docker Desktop isn't on your `PATH` | `export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"` |
+
+## What each file does
 
 | File | Purpose |
-|------|---------|
-| `docker-compose.yml` | The client only. Defaults to direct mode; set `NAVIDROME_URL` for proxy mode. Music volume + `MUSIC_DIR` enable uploads. |
-| `docker-compose.full.yml` | All-in-one: Navidrome **and** the client sharing a music folder. |
-| `Dockerfile` | Builds the static bundle and the Bun runtime image. |
-| `server/index.ts` | The Bun server: static hosting, API proxy, `/upload`, `/api/config`. |
-| `scripts/update.ts` | Cross-platform updater run by `bun run update` (pulls latest, preserves config, rebuilds). |
+|---|---|
+| `docker-compose.yml` | Tonearm on its own. |
+| `docker-compose.full.yml` | Tonearm **and** Navidrome together, sharing a music folder. |
+| `Dockerfile` | Builds the image. |
+| `server/index.ts` | The web server: serves the app, proxies your music server, handles uploads. |
+| `scripts/update.ts` | What `bun run update` runs. |

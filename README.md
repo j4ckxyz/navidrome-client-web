@@ -1,403 +1,159 @@
 # Tonearm
 
-**Tonearm** is a modern, **desktop-first** web client for [Navidrome](https://www.navidrome.org/) **and [Jellyfin](https://jellyfin.org/)** (music only). It runs entirely in the browser, talks directly to your existing server — Navidrome over its Subsonic/OpenSubsonic and native APIs, or Jellyfin over its native API — and keeps all durable state (playlists, favourites, play counts) **on the server** so it stays in sync with your other clients.
+A music player for your own [Navidrome](https://www.navidrome.org/) or
+[Jellyfin](https://jellyfin.org/) server. It runs in your browser (or as a
+desktop app) and talks straight to the server you already have.
 
-At login you pick which server you're connecting to; the choice is stored with your credentials so the app knows which API to use. Existing Navidrome logins keep working unchanged across an update — to try Jellyfin, just log out and log back in with the Jellyfin option. (Only Jellyfin's music library is used — films and TV are never touched.)
+Playlists, favourites and play counts live **on your server**, so everything
+stays in sync with whatever else you use. There's no database and no account to
+create — Tonearm is just a nicer front end for music you already own.
 
-There is **no database**, and in its simplest form **no backend** — the app is a static bundle and everything happens in your browser. An optional thin proxy server ships in the Docker image to avoid CORS and (for admins) enable uploads; see [Running with Docker](#running-with-docker-recommended). The proxy and admin upload are Navidrome-only; Jellyfin connects directly and needs [CORS enabled](https://jellyfin.org/docs/general/networking/) for this app's origin.
-
-> Designed for desktop browsers only: wide multi-pane layouts, hover states, right-click context menus, and keyboard shortcuts. Good iOS/Android clients already exist, so mobile layouts are intentionally out of scope.
+> **Desktop only.** Wide layouts, right-click menus, keyboard shortcuts. Phones
+> and tablets aren't supported — good mobile apps for both servers already exist.
 
 ## Features
 
-- **Library browsing** — artists, albums, tracks, genres, plus recently added / recently played / most played.
-- **Server-side search**, debounced.
-- **Playlists** — view, create, rename, reorder (drag), remove tracks, delete. All persisted via the API. Upload a **custom cover photo** per playlist, stored on the server so it syncs to every client. Reordering uses each backend's best mechanism (Jellyfin's atomic move; a rewrite on Subsonic).
-- **Favourites / stars** with instant feedback, synced to the server.
-- **Persistent now-playing bar** with full transport, a live seek bar, queue, and volume.
-- **Queue** side panel with drag-to-reorder.
-- **Lyrics** side panel, with synced (time-aligned) highlighting. Your server is asked first; if it has none — which is most self-hosted libraries, since few files carry lyrics tags — you can opt in to fetching them from [LRCLIB](https://lrclib.net), a free, open, no-account database of ~3M tracks with time-synced words. Off by default: it's the only request the app makes to anything other than your own server, and it sends just the artist, title, album and length of what's playing.
-- **Album & artist pages** with metadata, cover art, biographies, and similar artists.
-- **Gapless-ish playback, crossfade, and ReplayGain normalization** via the Web Audio API.
-- **Infinite radio** that stays on topic. When the queue runs out it keeps going with tracks ranked against the seed's genre, era, artist and your favourites — rather than trusting the server's own "similar songs", which on Jellyfin is close to a library shuffle (seeded with 1992 hip-hop it offered Taylor Swift and Conan Gray). Measured on a real library, genre coherence went from ~30% to ~95%. Every batch is anchored to a track *you* chose, never to one radio added, so a long session can't drift; added tracks are marked `radio` in the queue.
-- **Keyboard shortcuts** for playback and navigation — fully rebindable.
-- **Admin music upload** — when deployed alongside your server (see below), admins get an upload button that accepts audio files, whole folders, or a ZIP, writes them into the library, and triggers a scan. All embedded metadata is preserved.
-- **Update checking** — admins can see, from Settings, whether the deployment is behind the latest release, and (opt-in) update it in one click.
-- **A deep settings system** (see below).
+**Playing music**
+- Full library browsing — artists, albums, tracks, genres, recently added, most played
+- Queue with drag-to-reorder, and a persistent player bar
+- Crossfade, gapless-ish playback, and volume levelling (ReplayGain)
+- A 10-band equaliser and a music-reactive full-screen visualiser
+- Synced lyrics, with an optional fallback to [LRCLIB](https://lrclib.net) when your files have none
+- **Infinite radio** — when the queue empties it keeps going with tracks that
+  actually match what you were listening to, rather than drifting into a shuffle
 
-### Jellyfin specifics
+**Your library**
+- Search, favourites, and playlists (create, rename, reorder, custom cover art)
+- Download tracks, albums or playlists for offline listening
+- A **Stats** page: how much you've listened to, your most-played songs, albums
+  and artists, and what's in the library
+- Admins can upload music from the browser — files, folders or a ZIP
 
-Tonearm speaks Jellyfin the way Jellyfin's own clients do, rather than treating it
-as a Subsonic server with different URLs:
+**Making it yours**
+- Nine themeable regions with presets, or build your own and share it as a code or QR
+- Rebindable keyboard shortcuts, adjustable density and cover-art size
+- Settings export/import
 
-- **Negotiated playback.** Every track goes through `POST /Items/{id}/PlaybackInfo`
-  with a device profile built from what your browser can actually decode. Jellyfin
-  hands back either the original file to direct-play or a transcode URL, plus the
-  `PlaySessionId` that keys the server-side encoder. Nothing is guessed.
-- **Correct session reporting.** Playback start, progress every 10s, and a single
-  stop at the end — so play counts increment, Now Playing appears on the Jellyfin
-  dashboard, and resume positions are real.
-- **Remote control, both directions.** One WebSocket, used two ways.
-  - *Driven from elsewhere:* the app registers its capabilities, so it shows up
-    as a "Play On" target and can be controlled from the Jellyfin app or web
-    dashboard (play/pause, skip, seek, volume, repeat, shuffle, queue push).
-  - *Driving elsewhere:* a **device picker** in the now-playing bar lists every
-    other Jellyfin session on your account — phone, TV, another browser. Pick
-    one and playback hands off to it: local audio stops, the now-playing bar,
-    full-screen player and queue panel mirror that device live, and every Play /
-    Play next / Add to queue action in the library goes there instead. Pick
-    "This computer" to take it back, and your local queue returns where you left
-    it. If the device drops off the network, the app falls back to local on its
-    own.
-- **Quick Connect** sign-in — no password typing on a TV or shared machine.
-- **Multiple music libraries**, picked from the sidebar.
-- **Instant Mix radio** seeded from a track, album, artist, or genre.
-- **Live radio and music videos** from the same server, with no second login.
-- **Album/playlist downloads**, zipped in the browser since Jellyfin has no
-  server-side bundling endpoint.
+**If you use Jellyfin**
+- Quick Connect sign-in, multiple music libraries, Instant Mix radio, live radio and music videos
+- **Remote control both ways** — control Tonearm from the Jellyfin app, or push
+  playback from Tonearm to your phone or TV
 
-## The settings system
+## Install
 
-Settings live in `localStorage` under `nd:settings`, namespaced separately from credentials, and never leave your browser.
+You need [Docker](https://docs.docker.com/get-started/get-docker/) and
+[git](https://git-scm.com/downloads). Start by grabbing the code:
 
-- **Theming** — nine independently themeable regions (sidebar, content, surfaces, accent, now-playing bar, text colours…). Choose a preset (Dark, Light, Midnight, Warm, Mono) or customize:
-  - **Simple** mode: pick a base (dark/light) + an accent; the rest of the palette is derived in OKLCH with contrast kept readable.
-  - **Advanced** mode: full control over all nine regions.
-  - **Share a theme** as a short `ndtheme:…` code or a QR image. Import by pasting a code or uploading a QR screenshot. Great for self-hosters sharing looks around.
-- **Layout** — density (compact / comfortable / spacious), cover-art size, default landing page, default panel visibility.
-- **Playback** — default volume, crossfade, gapless, scrobbling, ReplayGain mode + pre-amp, max streaming bitrate, resume-queue-on-launch.
-- **Power user** — rebindable keyboard shortcuts, next-track prefetch, cover-art cache budget, polling/cache intervals, a **debug panel** that shows raw API responses, and a log level.
-- **Backup** — export/import the full settings as a validated JSON file (credentials are never included), plus reset-to-defaults.
+```bash
+git clone https://github.com/j4ckxyz/navidrome-client-web.git
+cd navidrome-client-web
+```
 
-## Deploying
+Then pick the one that describes you.
 
-The Docker image is a small Bun server. Depending on how you configure it, it runs in one of two modes:
+### I don't have a music server yet
 
-- **Proxy mode** (`NAVIDROME_URL` set) — the server forwards all API/auth calls to one Navidrome server. The browser only ever talks to this app's own origin, so **there is no CORS to configure**. This is the mode that can enable uploads.
-- **Direct mode** (`NAVIDROME_URL` unset) — no proxy. Each user types their own Navidrome URL at login and the browser talks to it directly. Use this to host **one public client that many people point at their own servers**. Uploads are never available in this mode.
+This starts Navidrome **and** Tonearm together, sharing one music folder. Point
+it at your music:
 
-> **Full walkthrough for every scenario (great for scripts/agents): [DEPLOYMENT.md](DEPLOYMENT.md).**
+```bash
+MUSIC_HOST_DIR=/path/to/your/music docker compose -f docker-compose.full.yml up -d
+```
 
-### Which setup do I want?
+Open <http://localhost:8680> and create your account on first login.
 
-| Your situation | Use | Uploads |
-|----------------|-----|---------|
-| **I host this publicly** for many people, each with their **own** Navidrome | Direct mode (`docker-compose.yml`, leave `NAVIDROME_URL` empty) | ❌ off by design |
-| **Just me / my household**, client + Navidrome on the **same box**, I want to upload music from the browser | All-in-one (`docker-compose.full.yml`) **or** proxy mode + mounted music folder | ✅ admins only |
-| Client and Navidrome on **different machines/containers**, no uploads needed | Proxy mode (`docker-compose.yml`, set `NAVIDROME_URL`) | ❌ |
+### I already run Navidrome or Jellyfin
 
-### Environment variables
+```bash
+NAVIDROME_URL=http://host.docker.internal:4533 bun run compose:up
+```
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `NAVIDROME_URL` | _(empty)_ | Target server to proxy to. **Empty = direct mode** (users enter their own URL). Set = proxy mode (no CORS). |
-| `MUSIC_DIR` | _(empty — uploads off)_ | Path **inside the container** where music lives. To enable the **admin upload** UI you must set this (e.g. `/music`), mount that path to the exact folder your Navidrome scans, **and** have `NAVIDROME_URL` set. Empty keeps uploads off. |
-| `PORT` | `8080` | Port the server listens on. |
-| `UPDATE_REPO` | `j4ckxyz/navidrome-client-web` | Repo the update check compares against. Change it if you run a fork. |
-| `UPDATE_BRANCH` | `main` | Branch the update check follows. |
-| `SELF_UPDATE` | _(off)_ | Set to `1` to let admins apply updates from the Settings page. Requires the extra mounts described below — **off by default**. |
-| `REPO_DIR` | `/repo` | Where the git checkout is mounted when `SELF_UPDATE` is on. |
-| `JELLYFIN_URL` | _(empty)_ | Jellyfin server used to verify that a caller is an admin. Only needed for `SELF_UPDATE` on a Jellyfin-backed deployment. |
+Replace the URL with your server's. Open <http://localhost:8680>.
 
-Uploads are **off by default** and gated three ways, so a public deployment can't be abused: the operator must explicitly set `MUSIC_DIR` + mount the matching folder, the request must come from a user the **proxied server confirms is an admin**, and direct mode disables the endpoint entirely.
+> `host.docker.internal` means "the machine Docker is running on" and works on
+> Docker Desktop for Mac and Windows. On Linux use your server's IP address
+> instead.
 
-### Updating your instance
+To also upload music from the browser, see
+[DEPLOYMENT.md](DEPLOYMENT.md#uploading-music).
 
-**On the machine you deployed from, in that folder:**
+### I want to host it for other people
+
+Leave the server URL empty and everyone types in their own at login:
+
+```bash
+bun run compose:up
+```
+
+Each person's server then needs to allow your site to talk to it — see
+[DEPLOYMENT.md](DEPLOYMENT.md#hosting-for-other-people).
+
+## Updating
+
+In the folder you installed to:
 
 ```bash
 bun run update
 ```
 
-That's the whole thing. It reads the Compose project that actually created your running container, preserves your `docker-compose*.yml` and `.env` **verbatim**, pulls the latest source, and rebuilds in place. It's safe to re-run — if you're already current it exits without touching anything — and it never touches a Navidrome you manage separately.
+That's it. It pulls the latest version, keeps your settings and compose files
+untouched, and rebuilds. Safe to run any time — it does nothing if you're
+already up to date.
 
-Prefer to do it by hand? The equivalent is:
+Admins also get an **Updates** card in Settings → Connections showing whether
+you're behind, with a link to what changed.
 
-```bash
-git pull
-COMMIT_HASH=$(git rev-parse HEAD) docker compose up -d --build
-```
+To have it update itself on a schedule, see
+[docs/scheduled-updates.md](docs/scheduled-updates.md).
 
-Pass `COMMIT_HASH` and the app can report its own version; without it the Updates card shows "Running: unknown" (it still detects updates by release version, so the check works either way). `bun run update` always passes it.
+## Desktop app
 
-To have it happen on its own, see [Updating automatically](#updating-automatically) below.
+Native apps for macOS, Windows and Linux are on the
+[releases page](https://github.com/j4ckxyz/navidrome-client-web/releases), and
+linked from Settings → Connections. They use your system's built-in web view
+rather than bundling a whole browser, so they stay small and start fast.
 
-### Checking for updates
+## Your privacy
 
-Admins get an **Updates** card in Settings → Connections. It compares what this build is running against GitHub — by commit when the build recorded one, and by release version otherwise — and tells you how far behind you are, with a link to the diff. It checks on load and every six hours; both are toggles on the card.
+- Your password is never stored — only a token derived from it, kept in your browser.
+- Nothing is sent anywhere except your own server, with one exception: if you
+  turn on the LRCLIB lyrics fallback, the artist, title, album and length of the
+  current track are sent to look them up.
+- Settings and themes stay in your browser.
 
-Installing the update is a separate question, because the shipped container deliberately has no git checkout and no Docker socket:
+## Development
 
-- **Default (recommended).** The card shows you `bun run update` to run, as above.
-
-- **Opt-in one-click updates.** Set `SELF_UPDATE=1` and give the container what the updater needs — the checkout and the Docker socket:
-
-  ```yaml
-  environment:
-    SELF_UPDATE: "1"
-  volumes:
-    - .:/repo                                   # the git checkout, including .git
-    - /var/run/docker.sock:/var/run/docker.sock # lets it rebuild itself
-  ```
-
-  > **Understand what this trades away.** Mounting the Docker socket gives the container root-equivalent control of the Docker host. Only do this on a deployment you trust and don't expose publicly. The endpoint additionally requires a caller your server confirms is an admin, and refuses outright unless both mounts are actually present.
-
-### Updating automatically
-
-The best of both: updates happen on their own, and the app gets **no extra privilege**. Your machine already has Docker access — that's what a Docker host is — so let *it* run the updater on a schedule instead of handing that power to a container. This is the same rebuild `SELF_UPDATE` performs, without the socket. (Watchtower, the usual answer for auto-updating containers, needs that same socket, so it doesn't avoid the trade.)
-
-`bun run update` is built for this: it's non-interactive, and it exits without touching anything when you're already current. Add `--quiet` and it prints only when something actually changed or failed, so a nightly job stays out of your logs unless it matters.
-
-First, get the absolute path to `bun` — schedulers run with a minimal `PATH`, so a bare `bun` usually won't resolve:
-
-```bash
-which bun          # macOS / Linux   → e.g. /Users/you/.bun/bin/bun
-where.exe bun      # Windows         → e.g. C:\Users\you\.bun\bin\bun.exe
-```
-
-Substitute that path, and your checkout folder, in whichever recipe fits.
-
-<details>
-<summary><b>Linux</b> — systemd timer</summary>
-
-The right choice on a server: the Docker daemon is a system service, so the job doesn't depend on anyone being logged in.
-
-```ini
-# /etc/systemd/system/tonearm-update.service
-[Unit]
-Description=Update Tonearm
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-WorkingDirectory=/srv/tonearm
-ExecStart=/usr/local/bin/bun run update --quiet
-```
-
-```ini
-# /etc/systemd/system/tonearm-update.timer
-[Unit]
-Description=Update Tonearm nightly
-
-[Timer]
-OnCalendar=daily
-RandomizedDelaySec=30m
-Persistent=true      # catch up after the machine was off
-
-[Install]
-WantedBy=timers.target
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now tonearm-update.timer
-
-systemctl list-timers tonearm-update.timer    # confirm it's scheduled
-sudo systemctl start tonearm-update.service   # run it once now, to test
-journalctl -u tonearm-update.service          # see what it did
-```
-
-Prefer cron? `17 4 * * * cd /srv/tonearm && /usr/local/bin/bun run update --quiet`
-
-</details>
-
-<details>
-<summary><b>macOS</b> — launchd agent</summary>
-
-Use a **LaunchAgent** (not a daemon): Docker Desktop runs as your logged-in user, so a root-level daemon would fire when Docker isn't there to answer.
-
-```xml
-<!-- ~/Library/LaunchAgents/com.tonearm.update.plist -->
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>            <string>com.tonearm.update</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/Users/you/.bun/bin/bun</string>
-    <string>run</string>
-    <string>update</string>
-    <string>--quiet</string>
-  </array>
-  <key>WorkingDirectory</key> <string>/Users/you/tonearm</string>
-  <key>StartCalendarInterval</key>
-  <dict>
-    <key>Hour</key>   <integer>4</integer>
-    <key>Minute</key> <integer>17</integer>
-  </dict>
-  <key>StandardOutPath</key>  <string>/tmp/tonearm-update.log</string>
-  <key>StandardErrorPath</key><string>/tmp/tonearm-update.log</string>
-</dict>
-</plist>
-```
-
-```bash
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.tonearm.update.plist
-launchctl kickstart -p gui/$(id -u)/com.tonearm.update   # run once now, to test
-cat /tmp/tonearm-update.log                              # see what it did
-```
-
-To remove it: `launchctl bootout gui/$(id -u)/com.tonearm.update`. On macOS 10.10 and older, `launchctl load -w <plist>` instead of `bootstrap`.
-
-If the Mac is asleep at the scheduled time, launchd runs the job once it wakes.
-
-</details>
-
-<details>
-<summary><b>Windows</b> — Task Scheduler</summary>
-
-Run it as your own user: Docker Desktop runs in your session, so "run whether user is logged on or not" would fire with no Docker to talk to.
-
-In PowerShell:
-
-```powershell
-$bun  = "$env:USERPROFILE\.bun\bin\bun.exe"
-$dir  = "$env:USERPROFILE\tonearm"
-
-$action   = New-ScheduledTaskAction -Execute $bun `
-              -Argument "run update --quiet" -WorkingDirectory $dir
-$trigger  = New-ScheduledTaskTrigger -Daily -At 4:17am
-# StartWhenAvailable catches up after the PC was off at the scheduled time.
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
-              -DontStopOnIdleEnd -ExecutionTimeLimit (New-TimeSpan -Hours 1)
-
-Register-ScheduledTask -TaskName "Tonearm update" `
-  -Action $action -Trigger $trigger -Settings $settings
-```
-
-```powershell
-Start-ScheduledTask  -TaskName "Tonearm update"   # run once now, to test
-Get-ScheduledTaskInfo -TaskName "Tonearm update"  # LastRunTime / LastTaskResult (0 = OK)
-```
-
-To remove it: `Unregister-ScheduledTask -TaskName "Tonearm update"`.
-
-</details>
-
-Whichever you use, two things apply:
-
-- **Docker has to be running** when the job fires. On macOS and Windows that means Docker Desktop set to start at login; on Linux the daemon already is a service.
-- **An update restarts the container**, so playback stops and anyone listening has to reload the page. Pick an hour nobody's listening — the examples use 04:17.
-
-
-### Quick start
-
-**A) All-in-one (also runs Navidrome) — simplest path to every feature:**
-
-```bash
-COMMIT_HASH=$(git rev-parse HEAD) MUSIC_HOST_DIR=/path/to/your/music docker compose -f docker-compose.full.yml up -d
-# open http://localhost:8680 and create your admin account on first login
-```
-
-**B) Alongside an existing Navidrome, with uploads:** uncomment the `volumes:` lines in `docker-compose.yml`, then:
-
-```bash
-NAVIDROME_URL=http://host.docker.internal:4533 \
-MUSIC_DIR=/music \
-MUSIC_HOST_DIR=/path/to/your/music \
-bun run compose:up
-```
-
-**C) Public client, users bring their own server (no uploads):**
-
-```bash
-bun run compose:up   # NAVIDROME_URL stays empty → direct mode
-```
-
-In direct mode each user's Navidrome must allow this app's origin via **CORS** (or be reverse-proxied behind the same origin). See [DEPLOYMENT.md](DEPLOYMENT.md#direct-mode-cors) for the exact headers and an nginx same-origin example.
-
-To build and run the image by hand:
-
-```bash
-docker build -t tonearm .
-docker run -d -p 8680:8080 \
-  -e NAVIDROME_URL=http://host.docker.internal:4533 \
-  -e MUSIC_DIR=/music \
-  -v /path/to/your/music:/music \
-  --name tonearm tonearm
-```
-
-## Authentication & privacy
-
-- On first load you enter your server URL, username, and password (or a Subsonic salt+token if you have one).
-- The app authenticates via Navidrome's native `/auth/login`, which returns a JWT **and** a Subsonic salt+token. It stores the salt+token (a hash of your password) and the JWT — **never your raw password**.
-- If native login isn't available, it falls back to standard Subsonic token auth (generating a salt and hashing locally), again without storing the password.
-- Credentials are stored in `localStorage`, **namespaced per server URL**, so you can switch between servers without losing previous logins.
-- Expired/invalid auth surfaces a re-login prompt rather than failing silently.
-
-## Tech stack & architecture
-
-- **SolidJS + Vite + TypeScript**, with **Bun** as the package manager. Solid's fine-grained reactivity suits a media-heavy, frequently-updating UI (the now-playing bar updates continuously without re-rendering the rest of the app).
-- **TanStack Solid Query** for server state (caching, dedup, background refresh); mutations invalidate the right keys so changes reflect across views.
-- **Kobalte** for accessible headless primitives (menus, dialogs), styled from scratch.
-- **Web Audio API** for volume, crossfade, and ReplayGain; a two-deck `<audio>` graph enables gapless preloading.
-- Theming is implemented as **CSS custom properties** written by a theme provider, which is what makes per-region, live theming cheap.
-
-```
-src/
-  api/        Subsonic + native API client, auth, types, md5
-  auth/       session store, login screen
-  player/     playback store, queue, Web Audio engine
-  features/   shell, player UI, playlists, settings, stars
-  pages/      routed views
-  ui/         styled primitives (cards, rows, icons, menus)
-  theme/      color math, presets, provider, share codes
-  settings/   schema + persisted store
-```
-
-## Local development
-
-Requires [Bun](https://bun.sh).
+Needs [Bun](https://bun.sh).
 
 ```bash
 bun install
-bun run dev        # start the dev server (http://localhost:5173)
-bun run build      # typecheck + production build to dist/
-bun run preview    # preview the production build
-bun run typecheck  # type-check only
+bun run dev        # http://localhost:5173
+bun run build      # typecheck + production build
+bun run typecheck
 ```
 
-During development you'll hit the same CORS rules above. The easiest dev setup is to run Navidrome locally and use a reverse proxy, or enable permissive CORS on your dev Navidrome instance.
+Built with SolidJS, Vite and TypeScript; Tauri for the desktop apps.
 
-### Native desktop builds
-
-Tonearm uses Tauri for its macOS, Windows and Linux application. Unlike Electron,
-it reuses the operating system WebView instead of shipping a separate Chromium
-runtime for every install; the release profile also enables LTO, size optimisation,
-symbol stripping and abort-on-panic. This keeps startup, package size and baseline
-memory use close to the web client rather than adding a browser process.
-
-```bash
-bun run desktop:dev
-bun run desktop:build
+```
+src/
+  api/        server clients (Navidrome + Jellyfin), auth, types
+  auth/       session, login
+  player/     playback, queue, audio engine
+  features/   shell, player UI, playlists, settings
+  pages/      routed views
+  ui/         shared components
+  theme/      colour maths, presets, share codes
+  settings/   schema + storage
 ```
 
-Tags matching `v*` trigger `.github/workflows/desktop-release.yml`, producing a
-universal (Apple Silicon + Intel) macOS 15+ DMG, Windows NSIS and MSI installers
-and a Linux AppImage on a public GitHub release. Publishing a release through
-GitHub's UI also triggers the same builds and attaches them to that release. The
-workflow can also be run manually with a release tag. Playback commands stay
-available in the native menu, while focus-aware WebView shortcuts avoid stealing
-standard text-editing keys. The same track, album and playlist Download actions as
-the web app save music for offline listening. Desktop icons are generated from the
-existing record mark at build time, with selectable colour variants for the
-running app. Native builds retain platform window controls, remember window
-geometry, and use macOS Vibrancy or Windows 11 Mica where supported. macOS also
-gets a full-width draggable titlebar and the conventional close-to-hide/Dock-reopen
-lifecycle; unsupported compositors fall back to an opaque window.
+Desktop builds: `bun run desktop:dev` / `bun run desktop:build`. Pushing a `v*`
+tag builds and publishes installers for all three platforms.
 
-See [docs/windows-release.md](docs/windows-release.md) for the Windows specifics:
-why the window effects have to stay best-effort, and how to enable Authenticode
-signing so Windows Security stops quarantining the installer.
+More detail: [DEPLOYMENT.md](DEPLOYMENT.md) ·
+[docs/windows-release.md](docs/windows-release.md) ·
+[docs/desktop-updates.md](docs/desktop-updates.md)
 
-See [docs/native-desktop-audit.md](docs/native-desktop-audit.md) for the
-platform-expectation checklist, and
-[docs/desktop-updates.md](docs/desktop-updates.md) for updater signing and the
-Linux command-line flow.
+## Not included
 
-## Out of scope
-
-No mobile/PWA layouts, and no broad library administration (user management, library configuration). This is a playback and browsing client, not an admin panel — though admins can upload music and trigger scans when the client is deployed alongside the server (see Docker above).
+No mobile layouts, and no server administration — this is a player, not an admin
+panel. (Admins can upload music and trigger scans, but that's the extent of it.)
