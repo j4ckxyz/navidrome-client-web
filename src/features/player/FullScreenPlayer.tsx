@@ -8,6 +8,8 @@ import { createEffect, createMemo, createSignal, onCleanup, onMount, Show } from
 import { createQuery } from "@tanstack/solid-query";
 import { client } from "~/auth/session";
 import { player } from "~/player/store";
+import { remoteTarget } from "~/player/remoteSessions";
+import { DevicePicker } from "./DevicePicker";
 import { qk } from "~/lib/query";
 import { settings, updateSettings } from "~/settings/store";
 import { isStarred, toggleStar } from "~/features/stars";
@@ -235,7 +237,11 @@ export function FullScreenPlayer() {
           >
             <Icon name="chevron-right" size={22} />
           </button>
-          <span class="fs-top-label muted">Now Playing</span>
+          <span class="fs-top-label muted">
+            <Show when={remoteTarget()} fallback="Now Playing">
+              Playing on {remoteTarget()!.name}
+            </Show>
+          </span>
           <ToggleMenuButton
             class="fs-display-menu"
             icon="sliders"
@@ -315,6 +321,7 @@ export function FullScreenPlayer() {
               max={player.state.duration || 1}
               onInput={(v) => player.seek(v)}
               ariaLabel="Seek"
+              disabled={!player.isSeekable()}
             />
             <span class="fs-time muted">{formatDuration(player.state.duration)}</span>
           </div>
@@ -359,6 +366,7 @@ export function FullScreenPlayer() {
           </Show>
 
           <div class="fs-volume">
+            <DevicePicker />
             <button class="icon-btn" onClick={() => player.toggleMute()} aria-label="Mute">
               <Icon name={volIcon()} size={18} />
             </button>

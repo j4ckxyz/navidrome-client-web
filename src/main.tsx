@@ -6,7 +6,9 @@ import { ThemeProvider } from "~/theme/provider";
 import { initSession } from "~/auth/session";
 import { player } from "~/player/store";
 import { installMediaSession } from "~/player/mediaSession";
+import { installJellyfinSocket } from "~/player/jellyfinSocket";
 import { installJellyfinRemote } from "~/player/jellyfinRemote";
+import { installRemoteSessions } from "~/player/remoteSessions";
 import { installListeners as installPwaListeners } from "~/lib/installPwa";
 import { desktopClasses, desktopPlatform, isTauriDesktop } from "~/lib/runtime";
 import { loadServerConfig } from "~/lib/serverConfig";
@@ -32,9 +34,15 @@ initSession();
 player.restoreQueue();
 // Lock-screen / media-key transport controls.
 installMediaSession();
-// Register as a controllable Jellyfin device ("Play On", remote control) when
-// the active backend is Jellyfin. No-op for Navidrome.
+// Remote control, both directions. All three are no-ops for Navidrome, whose
+// Subsonic API has no concept of a session or another device.
+//   - inbound:  be a controllable device, so a phone can drive playback here
+//   - outbound: discover other devices and hand playback off to one
+// Handlers are registered before the socket opens so nothing pushed on connect
+// is missed.
 installJellyfinRemote();
+installRemoteSessions();
+installJellyfinSocket();
 // Native shells neither need nor understand browser installation prompts.
 if (!isTauriDesktop) installPwaListeners();
 // Check if running with a backend proxy (non-blocking; sets proxyMode signal).

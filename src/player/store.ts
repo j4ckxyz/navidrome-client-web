@@ -3,7 +3,7 @@
 // (stars, play counts via scrobble) is written through the API so other clients
 // stay in sync.
 
-import { batch, createRoot, createSignal } from "solid-js";
+import { batch, createEffect, createRoot, createSignal, on } from "solid-js";
 import { createStore } from "solid-js/store";
 import type { Song } from "~/api/types";
 import type { StreamHandle } from "~/api/MusicClient";
@@ -13,6 +13,14 @@ import { proxyMode } from "~/lib/serverConfig";
 import { canPlayContainer } from "~/lib/codecs";
 import { nextRadioBatch } from "~/lib/recommendations";
 import { AudioEngine, type DeckTrack } from "./engine";
+import { socketClient } from "./jellyfinSocket";
+import {
+  remoteCommand,
+  remotePlay,
+  remotePlaystate,
+  remoteTarget,
+  type RemoteDevice,
+} from "./remoteSessions";
 
 // Whether the browser can decode this track as stored. Delegates to the shared
 // codec probe so the player and the Jellyfin device profile can never disagree
@@ -362,10 +370,170 @@ function createPlayer() {
     return null;
   }
 
+  // --- Remote playback ("play on another device") ---
+  //
+  // When a Jellyfin device is the target, the local engine goes silent and
+  // `state` becomes a *mirror* of that device. Deliberately the same store the
+  // local player writes: the now-playing bar, full-screen player, queue panel,
+  // media keys and every `player.playNow(...)` call site then work against the
+  // remote device without knowing it exists.
+
+  const TICKS = 10_000_000;
+  const isRemote = () => remoteTarget() !== null;
+
+  // What was playing here before the handoff, restored on the way back. Shuffle
+  // and repeat are part of it: the mirror overwrites them with the device's
+  // modes, and inheriting those on the way home would silently change how local
+  // playback behaves.
+  let localSnapshot: {
+    queue: Song[];
+    index: number;
+    time: number;
+    shuffle: boolean;
+    repeat: RepeatMode;
+  } | null = null;
+  // The remote queue's id list and the metadata resolved for it. Cached so a
+  // position update arriving every 1.5s doesn't refetch the whole queue.
+  let remoteQueueKey = "";
+  let remoteQueueSongs: Song[] = [];
+  // Position at the last push, plus when it arrived, so the scrubber can be
+  // interpolated between updates instead of ticking in 1.5s jumps.
+  let remoteBaseTime = 0;
+  let lastRemoteSync = 0;
+  let remoteTicker: ReturnType<typeof setInterval> | undefined;
+  // After a local seek, ignore incoming positions briefly: the device needs a
+  // moment to act on the command, and until it does its pushes still carry the
+  // old position, which would yank the scrubber back under the user's cursor.
+  let seekGuardUntil = 0;
+
+  async function loadRemoteQueue(key: string, ids: string[]): Promise<void> {
+    const jf = socketClient();
+    if (!jf || ids.length === 0) return;
+    try {
+      const songs = await jf.getSongsByIds(ids);
+      // A newer push may have replaced the queue while this was in flight.
+      if (key !== remoteQueueKey) return;
+      remoteQueueSongs = songs;
+      const device = remoteTarget();
+      if (device) mirrorRemote(device);
+    } catch {
+      // Keep the now-playing-only view rather than emptying the queue panel.
+    }
+  }
+
+  function mirrorRemote(device: RemoteDevice): void {
+    const key = device.queueIds.join(",");
+    if (key !== remoteQueueKey) {
+      remoteQueueKey = key;
+      // Drop straight to the now-playing track so the bar fills immediately;
+      // the rest of the queue arrives when the metadata request returns.
+      remoteQueueSongs = [];
+      void loadRemoteQueue(key, device.queueIds);
+    }
+    const queue = remoteQueueSongs.length
+      ? remoteQueueSongs
+      : device.nowPlaying
+        ? [device.nowPlaying]
+        : [];
+    const playingId = device.nowPlaying?.id;
+    const found = playingId ? queue.findIndex((song) => song.id === playingId) : -1;
+
+    const guarded = performance.now() < seekGuardUntil;
+    if (!guarded) {
+      remoteBaseTime = device.positionSeconds;
+      lastRemoteSync = performance.now();
+    }
+
+    batch(() => {
+      setState({
+        queue,
+        index: queue.length === 0 ? -1 : found >= 0 ? found : 0,
+        isPlaying: !!device.nowPlaying && !device.isPaused,
+        duration: device.nowPlaying?.duration ?? 0,
+        volume: device.volume,
+        muted: device.isMuted,
+        shuffle: device.shuffle,
+        repeat: device.repeat,
+      });
+      if (!guarded) setState("currentTime", device.positionSeconds);
+    });
+  }
+
+  function stopRemoteTicker(): void {
+    if (remoteTicker) clearInterval(remoteTicker);
+    remoteTicker = undefined;
+  }
+
+  function startRemoteTicker(): void {
+    stopRemoteTicker();
+    remoteTicker = setInterval(() => {
+      if (!state.isPlaying || performance.now() < seekGuardUntil) return;
+      const elapsed = (performance.now() - lastRemoteSync) / 1000;
+      const at = remoteBaseTime + elapsed;
+      setState("currentTime", state.duration > 0 ? Math.min(at, state.duration) : at);
+    }, 250);
+  }
+
+  // The handoff itself. Fires on every push (the memo returns a fresh object),
+  // which is what keeps the mirror live; `prev` distinguishes an update from an
+  // actual change of target.
+  createEffect(
+    on(remoteTarget, (device, prev) => {
+      if (device && !prev) {
+        // Going remote: end this device's server-side playback and silence the
+        // engine, but keep the queue in hand so coming back restores it.
+        localSnapshot = {
+          queue: [...state.queue],
+          index: state.index,
+          time: engine.getCurrentTime(),
+          shuffle: state.shuffle,
+          repeat: state.repeat,
+        };
+        releasePrefetched();
+        reportStop(engine.getCurrentTime());
+        engine.stop();
+      }
+      if (device) {
+        mirrorRemote(device);
+        startRemoteTicker();
+        return;
+      }
+      stopRemoteTicker();
+      remoteQueueKey = "";
+      remoteQueueSongs = [];
+      if (!prev) return;
+      // Coming home: restore what was playing here, paused where it left off.
+      const snap = localSnapshot;
+      localSnapshot = null;
+      const vol = settings.playback.defaultVolume / 100;
+      resumeAt = snap?.time ?? 0;
+      setState({
+        queue: snap?.queue ?? [],
+        index: snap?.index ?? -1,
+        isPlaying: false,
+        currentTime: snap?.time ?? 0,
+        duration: (snap ? snap.queue[snap.index]?.duration : 0) ?? 0,
+        volume: vol,
+        muted: false,
+        shuffle: snap?.shuffle ?? false,
+        repeat: snap?.repeat ?? "off",
+      });
+      engine.setVolume(vol);
+      engine.setMuted(false);
+    }),
+  );
+
   // --- Public actions ---
 
   function playNow(songs: Song[], startIndex = 0): void {
     if (songs.length === 0) return;
+    if (isRemote()) {
+      // The device resolves the tracks from the server itself, so shuffling is
+      // its job too — tell it the mode and let it build the order.
+      remoteCommand("SetShuffleQueue", { ShuffleMode: state.shuffle ? "Shuffle" : "Sorted" });
+      remotePlay(songs, "PlayNow", { startIndex });
+      return;
+    }
     let queue = songs;
     let index = startIndex;
     if (state.shuffle) {
@@ -382,6 +550,7 @@ function createPlayer() {
   }
 
   function addToQueue(songs: Song[]): void {
+    if (isRemote()) return remotePlay(songs, "PlayLast");
     setState("queue", (q) => [...q, ...songs]);
     if (state.index === -1 && state.queue.length > 0) {
       void playSongAt(0);
@@ -392,6 +561,7 @@ function createPlayer() {
   }
 
   function playNext(songs: Song[]): void {
+    if (isRemote()) return remotePlay(songs, "PlayNext");
     setState("queue", (q) => {
       const copy = [...q];
       copy.splice(state.index + 1, 0, ...songs);
@@ -402,6 +572,9 @@ function createPlayer() {
   }
 
   function removeAt(index: number): void {
+    // Jellyfin has no API for editing another device's queue — only for
+    // pushing to it. The queue panel disables reordering while remote.
+    if (isRemote()) return;
     if (index < 0 || index >= state.queue.length) return;
     const wasCurrent = index === state.index;
     setState("queue", (q) => q.filter((_, i) => i !== index));
@@ -419,6 +592,7 @@ function createPlayer() {
   }
 
   function moveInQueue(from: number, to: number): void {
+    if (isRemote()) return;
     setState("queue", (q) => {
       const copy = [...q];
       const [item] = copy.splice(from, 1);
@@ -437,12 +611,26 @@ function createPlayer() {
   }
 
   function clearQueue(): void {
+    // Stopping is the closest a remote gets: it ends playback and the device
+    // clears its own queue.
+    if (isRemote()) return remotePlaystate("Stop");
     stop();
     setState({ queue: [], index: -1 });
     persistQueue();
   }
 
   function togglePlay(): void {
+    if (isRemote()) {
+      // Explicit Pause/Unpause rather than PlayPause: the toggle would act on
+      // the device's own idea of the state, which can differ from what the
+      // mirror is showing, and flip the wrong way.
+      const pausing = state.isPlaying;
+      remotePlaystate(pausing ? "Pause" : "Unpause");
+      setState("isPlaying", !pausing); // optimistic; the next push confirms
+      if (!pausing) lastRemoteSync = performance.now();
+      else remoteBaseTime = state.currentTime;
+      return;
+    }
     if (state.index === -1) {
       if (state.queue.length > 0) void playSongAt(0);
       return;
@@ -462,10 +650,12 @@ function createPlayer() {
   }
 
   function next(): void {
+    if (isRemote()) return remotePlaystate("NextTrack");
     advance(false);
   }
 
   function previous(): void {
+    if (isRemote()) return remotePlaystate("PreviousTrack");
     // Restart current track if we're more than 3s in.
     if (engine.getCurrentTime() > 3) {
       engine.seek(0);
@@ -621,12 +811,21 @@ function createPlayer() {
   }
 
   function stop(): void {
+    if (isRemote()) return remotePlaystate("Stop");
     reportStop(engine.getCurrentTime());
     engine.stop();
     setState({ isPlaying: false, currentTime: 0, duration: 0 });
   }
 
   function seek(time: number): void {
+    if (isRemote()) {
+      remotePlaystate("Seek", Math.round(Math.max(0, time) * TICKS));
+      remoteBaseTime = Math.max(0, time);
+      lastRemoteSync = performance.now();
+      seekGuardUntil = performance.now() + 2_000;
+      setState("currentTime", Math.max(0, time));
+      return;
+    }
     engine.seek(time);
     setState("currentTime", time);
     // Tell the server where we jumped to; on Jellyfin this keeps the remote's
@@ -635,11 +834,16 @@ function createPlayer() {
   }
 
   function seekBy(delta: number): void {
-    seek(engine.getCurrentTime() + delta);
+    seek(isRemote() ? state.currentTime + delta : engine.getCurrentTime() + delta);
   }
 
   function setVolume(v: number): void {
     const vol = Math.max(0, Math.min(1, v));
+    if (isRemote()) {
+      remoteCommand("SetVolume", { Volume: String(Math.round(vol * 100)) });
+      setState({ volume: vol, muted: false });
+      return;
+    }
     engine.setVolume(vol);
     setState({ volume: vol, muted: false });
     engine.setMuted(false);
@@ -651,17 +855,30 @@ function createPlayer() {
 
   function toggleMute(): void {
     const m = !state.muted;
+    if (isRemote()) {
+      remoteCommand(m ? "Mute" : "Unmute");
+      setState("muted", m);
+      return;
+    }
     engine.setMuted(m);
     setState("muted", m);
   }
 
   function toggleShuffle(): void {
-    setState("shuffle", (s) => !s);
+    const want = !state.shuffle;
+    setState("shuffle", want);
+    if (isRemote()) remoteCommand("SetShuffleQueue", { ShuffleMode: want ? "Shuffle" : "Sorted" });
   }
 
   function cycleRepeat(): void {
     const order: RepeatMode[] = ["off", "all", "one"];
-    setState("repeat", (r) => order[(order.indexOf(r) + 1) % order.length]);
+    const next = order[(order.indexOf(state.repeat) + 1) % order.length];
+    setState("repeat", next);
+    if (isRemote()) {
+      const mode = next === "all" ? "RepeatAll" : next === "one" ? "RepeatOne" : "RepeatNone";
+      remoteCommand("SetRepeatMode", { RepeatMode: mode });
+      return;
+    }
     prefetchNext();
   }
 
@@ -775,6 +992,9 @@ function createPlayer() {
 
   function persistQueue(): void {
     if (!settings.playback.resumeQueueOnLaunch) return;
+    // While remote, `state.queue` is the other device's queue — persisting it
+    // would overwrite the local one that's waiting to be restored.
+    if (isRemote()) return;
     try {
       localStorage.setItem(
         QUEUE_KEY,
@@ -839,7 +1059,7 @@ function createPlayer() {
     seekBy,
     // True when the current stream can be scrubbed in place. A server-side
     // transcode can still be "seeked" — it just reopens at the new offset.
-    isSeekable: () => engine.isSeekable(),
+    isSeekable: () => remoteTarget()?.canSeek ?? engine.isSeekable(),
     setVolume,
     changeVolume,
     toggleMute,

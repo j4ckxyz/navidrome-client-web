@@ -59,3 +59,16 @@
 .slider:focus-visible {
   outline: none;
 }
+
+/* A seek bar for a device that can't scrub (some Jellyfin clients report
+   CanSeek false). Still shows progress — it just isn't a control. */
+.slider:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.slider:disabled::-webkit-slider-thumb {
+  opacity: 0;
+}
+.slider:disabled::-moz-range-thumb {
+  opacity: 0;
+}

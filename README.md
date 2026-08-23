@@ -36,9 +36,18 @@ as a Subsonic server with different URLs:
 - **Correct session reporting.** Playback start, progress every 10s, and a single
   stop at the end — so play counts increment, Now Playing appears on the Jellyfin
   dashboard, and resume positions are real.
-- **Remote control.** The app registers its capabilities and holds a WebSocket, so
-  it shows up as a "Play On" target and can be driven from the Jellyfin app or web
-  dashboard (play/pause, skip, seek, volume, repeat, shuffle, queue push).
+- **Remote control, both directions.** One WebSocket, used two ways.
+  - *Driven from elsewhere:* the app registers its capabilities, so it shows up
+    as a "Play On" target and can be controlled from the Jellyfin app or web
+    dashboard (play/pause, skip, seek, volume, repeat, shuffle, queue push).
+  - *Driving elsewhere:* a **device picker** in the now-playing bar lists every
+    other Jellyfin session on your account — phone, TV, another browser. Pick
+    one and playback hands off to it: local audio stops, the now-playing bar,
+    full-screen player and queue panel mirror that device live, and every Play /
+    Play next / Add to queue action in the library goes there instead. Pick
+    "This computer" to take it back, and your local queue returns where you left
+    it. If the device drops off the network, the app falls back to local on its
+    own.
 - **Quick Connect** sign-in — no password typing on a TV or shared machine.
 - **Multiple music libraries**, picked from the sidebar.
 - **Instant Mix radio** seeded from a track, album, artist, or genre.

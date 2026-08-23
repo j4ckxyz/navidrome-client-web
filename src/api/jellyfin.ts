@@ -53,7 +53,7 @@ import type {
 } from "./MusicClient";
 
 // Jellyfin's BaseItemDto, narrowed to the fields we read.
-interface JfItem {
+export interface JfItem {
   Id: string;
   Name: string;
   Type?: string;
@@ -123,6 +123,35 @@ interface JfPlaybackInfo {
   MediaSources?: JfMediaSource[];
   PlaySessionId?: string;
   ErrorCode?: string;
+}
+
+// A device with a live session on the server. Only the fields this app reads
+// are declared; Jellyfin sends a great deal more.
+export interface JfSessionInfo {
+  Id?: string;
+  DeviceId?: string;
+  DeviceName?: string;
+  Client?: string;
+  ApplicationVersion?: string;
+  UserId?: string;
+  UserName?: string;
+  SupportsRemoteControl?: boolean;
+  SupportedCommands?: string[];
+  PlayableMediaTypes?: string[];
+  LastActivityDate?: string;
+  NowPlayingItem?: JfItem;
+  PlayState?: JfPlayState;
+  NowPlayingQueue?: { Id?: string; PlaylistItemId?: string }[];
+}
+
+export interface JfPlayState {
+  PositionTicks?: number;
+  CanSeek?: boolean;
+  IsPaused?: boolean;
+  IsMuted?: boolean;
+  VolumeLevel?: number;
+  RepeatMode?: string;
+  PlaybackOrder?: string;
 }
 
 interface JfList {
@@ -659,6 +688,96 @@ export class JellyfinClient implements MusicClient {
     } catch {
       // Older server or restricted user — remote control simply won't appear.
     }
+  }
+
+  // This device's id, so the session list can tell "us" apart from the other
+  // devices on the account (we always appear in our own /Sessions response).
+  get myDeviceId(): string {
+    return this.deviceId;
+  }
+
+  // --- Remote control: driving *other* sessions --------------------------------
+  //
+  // The mirror image of jellyfinRemote. Jellyfin's session API is a relay: this
+  // app posts a command against another session's id and the server pushes it
+  // down that device's own socket. Nothing is sent peer-to-peer, so a device is
+  // controllable from here exactly when the server can still reach it.
+
+  // Sessions on this account that this user is allowed to drive. The server
+  // applies the permission check; the caller still filters out our own device
+  // and anything that didn't advertise media control.
+  async getSessions(): Promise<JfSessionInfo[]> {
+    const list = await this.get<JfSessionInfo[]>("/Sessions", {
+      ControllableByUserId: this.userId,
+    });
+    return Array.isArray(list) ? list : [];
+  }
+
+  // Transport commands: PlayPause, Pause, Unpause, Stop, NextTrack,
+  // PreviousTrack, Seek, Rewind, FastForward.
+  async sessionPlaystate(
+    sessionId: string,
+    command: string,
+    seekPositionTicks?: number,
+  ): Promise<void> {
+    await this.request("POST", `/Sessions/${sessionId}/Playing/${command}`, {
+      params: { seekPositionTicks },
+    });
+  }
+
+  // Everything that isn't transport: SetVolume, Mute, SetRepeatMode, and so on.
+  // Sent as a body rather than in the path so the arguments ride along.
+  async sessionCommand(
+    sessionId: string,
+    name: string,
+    args?: Record<string, string>,
+  ): Promise<void> {
+    await this.request("POST", `/Sessions/${sessionId}/Command`, {
+      body: { Name: name, Arguments: args ?? {} },
+    });
+  }
+
+  // Push items to a session. PlayNow replaces its queue, PlayNext/PlayLast
+  // splice into it. This is the same call the Jellyfin app's "Play On" makes.
+  async sessionPlay(
+    sessionId: string,
+    itemIds: string[],
+    playCommand: "PlayNow" | "PlayNext" | "PlayLast" = "PlayNow",
+    opts: { startIndex?: number; startPositionTicks?: number } = {},
+  ): Promise<void> {
+    if (itemIds.length === 0) return;
+    await this.request("POST", `/Sessions/${sessionId}/Playing`, {
+      params: {
+        playCommand,
+        itemIds: itemIds.join(","),
+        startIndex: opts.startIndex,
+        startPositionTicks: opts.startPositionTicks,
+      },
+    });
+  }
+
+  // Resolve many track ids in one request, in the order asked for. Jellyfin
+  // returns /Items in its own sort order and silently drops ids the user can't
+  // see, so the result is re-keyed rather than trusted positionally.
+  async getSongsByIds(ids: string[]): Promise<Song[]> {
+    if (ids.length === 0) return [];
+    const data = await this.get<JfList>("/Items", {
+      userId: this.userId,
+      ids: ids.join(","),
+      Fields: SONG_FIELDS,
+    });
+    const byId = new Map<string, Song>();
+    for (const item of data.Items ?? []) {
+      const song = this.toSong(item);
+      byId.set(song.id, song);
+    }
+    return ids.map((id) => byId.get(id)).filter((s): s is Song => s !== undefined);
+  }
+
+  // Map a NowPlayingItem straight from a session payload, so the UI can show
+  // what a device is playing without a second round-trip for metadata.
+  songFromItem(item: JfItem): Song {
+    return this.toSong(item);
   }
 
   // WebSocket URL for the remote-control channel (see player/jellyfinRemote).

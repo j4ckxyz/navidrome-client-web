@@ -14,6 +14,8 @@ import { CoverArt } from "~/ui/CoverArt";
 import { Icon } from "~/ui/Icon";
 import { Slider } from "~/ui/Slider";
 import { MenuButton, type ActionItem } from "~/ui/Menu";
+import { DevicePicker } from "./DevicePicker";
+import { remoteTarget } from "~/player/remoteSessions";
 import { formatDuration } from "~/lib/format";
 import "./nowplaying.css";
 
@@ -63,9 +65,18 @@ export function NowPlayingBar() {
   };
 
   return (
-    <footer class="np-bar" classList={{ "np-empty": !song() }}>
+    <footer class="np-bar" classList={{ "np-empty": !song(), "np-remote": !!remoteTarget() }}>
       <div class="np-left">
-        <Show when={song()} fallback={<div class="np-placeholder muted">Nothing playing</div>}>
+        <Show
+          when={song()}
+          fallback={
+            <div class="np-placeholder muted">
+              <Show when={remoteTarget()} fallback="Nothing playing">
+                Ready to play on {remoteTarget()!.name}
+              </Show>
+            </div>
+          }
+        >
           <button
             class="np-cover-btn"
             onClick={() => openFullScreen()}
@@ -140,12 +151,14 @@ export function NowPlayingBar() {
             max={player.state.duration || 1}
             onInput={(v) => player.seek(v)}
             ariaLabel="Seek"
+            disabled={!player.isSeekable()}
           />
           <span class="np-time muted">{formatDuration(player.state.duration)}</span>
         </div>
       </div>
 
       <div class="np-right">
+        <DevicePicker />
         <Show when={currentMusicVideo()}>
           <button
             class="icon-btn np-video"

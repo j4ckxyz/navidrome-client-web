@@ -10,6 +10,7 @@ import { createMemo, createSignal, For, Show } from "solid-js";
 import { createQuery } from "@tanstack/solid-query";
 import { client } from "~/auth/session";
 import { player } from "~/player/store";
+import { remoteTarget } from "~/player/remoteSessions";
 import { settings } from "~/settings/store";
 import { applyDiscoveryFilters } from "~/lib/recommendations";
 import { CoverArt } from "~/ui/CoverArt";
@@ -55,7 +56,12 @@ export function QueuePanel() {
   return (
     <aside class="side-panel queue-panel">
       <div class="side-panel-head">
-        <h2 class="side-panel-title">Queue</h2>
+        <h2 class="side-panel-title">
+          Queue
+          <Show when={remoteTarget()}>
+            <span class="queue-on muted"> on {remoteTarget()!.name}</span>
+          </Show>
+        </h2>
         <Show when={player.state.queue.length > 0}>
           <button class="btn btn-ghost queue-clear" onClick={() => player.clearQueue()}>
             Clear
@@ -83,7 +89,9 @@ export function QueuePanel() {
                     "queue-item-current": real() === player.state.index,
                     "queue-item-over": overIndex() === real(),
                   }}
-                  draggable={true}
+                  // Jellyfin can push items to a device but not reorder or
+                  // remove from its queue, so dragging is off while remote.
+                  draggable={!remoteTarget()}
                   onDragStart={(e) => {
                     setDragIndex(real());
                     e.dataTransfer!.effectAllowed = "move";
@@ -102,9 +110,11 @@ export function QueuePanel() {
                   }}
                   onDblClick={() => player.playNow(player.state.queue, real())}
                 >
-                  <span class="queue-grip" aria-hidden="true">
-                    <Icon name="grip" size={16} />
-                  </span>
+                  <Show when={!remoteTarget()}>
+                    <span class="queue-grip" aria-hidden="true">
+                      <Icon name="grip" size={16} />
+                    </span>
+                  </Show>
                   <CoverArt coverArt={song.coverArt} size={38} alt="" class="queue-cover" />
                   <div class="queue-meta">
                     <span class="queue-title" classList={{ "accent-text": real() === player.state.index }}>
@@ -113,13 +123,15 @@ export function QueuePanel() {
                     <span class="queue-artist muted">{song.artist}</span>
                   </div>
                   <span class="queue-dur muted">{formatDuration(song.duration)}</span>
-                  <button
-                    class="icon-btn queue-remove"
-                    onClick={() => player.removeAt(real())}
-                    aria-label="Remove from queue"
-                  >
-                    <Icon name="close" size={15} />
-                  </button>
+                  <Show when={!remoteTarget()}>
+                    <button
+                      class="icon-btn queue-remove"
+                      onClick={() => player.removeAt(real())}
+                      aria-label="Remove from queue"
+                    >
+                      <Icon name="close" size={15} />
+                    </button>
+                  </Show>
                 </div>
               );
             }}

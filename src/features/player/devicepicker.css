@@ -1,0 +1,97 @@
+/* The "playing on" device picker in the now-playing bar. */
+
+/* When a remote device is the target, the trigger widens to name it — the app
+   is showing another device's playback, and that has to be unmissable rather
+   than a subtly tinted icon. */
+.dp-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.dp-trigger.active {
+  color: var(--accent);
+}
+.dp-trigger-name {
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dp-menu {
+  min-width: 264px;
+  max-width: 320px;
+}
+
+.dp-item {
+  gap: 10px;
+  padding: 7px 9px;
+  align-items: center;
+}
+.dp-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.dp-item-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dp-item-sub {
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The highlight already recolours the row, so the dimmed subtitle has to come
+   back with it or it drops out against the accent fill. */
+.dp-item[data-highlighted] .dp-item-sub,
+.dp-item[data-highlighted] .muted {
+  color: inherit;
+  opacity: 0.75;
+}
+.dp-item-active .dp-item-name {
+  font-weight: 600;
+  color: var(--accent);
+}
+.dp-item-active[data-highlighted] .dp-item-name {
+  color: inherit;
+}
+
+.dp-playing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  animation: dp-pulse 1.6s ease-in-out infinite;
+}
+.dp-item[data-highlighted] .dp-playing-dot {
+  background: currentColor;
+}
+@keyframes dp-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dp-playing-dot {
+    animation: none;
+  }
+}
+
+.dp-empty {
+  padding: 8px 10px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}

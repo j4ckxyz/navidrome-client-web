@@ -190,3 +190,10 @@
     display: none;
   }
 }
+
+/* Playback is on another device. A hairline accent along the top of the bar,
+   with the device named in the picker itself — enough to explain why the
+   transport controls aren't driving this machine's speakers. */
+.np-bar.np-remote {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}

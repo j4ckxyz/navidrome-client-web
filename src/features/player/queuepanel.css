@@ -15,6 +15,16 @@
 .side-panel-title {
   font-size: 16px;
   font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Names the device whose queue is on screen — while remote this panel is not
+   showing your local queue. */
+.queue-on {
+  font-size: 13px;
+  font-weight: 400;
 }
 .queue-clear {
   font-size: 12px;

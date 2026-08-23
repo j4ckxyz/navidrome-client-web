@@ -12,6 +12,7 @@ export function Slider(props: {
   onChange?: (v: number) => void;
   ariaLabel: string;
   class?: string;
+  disabled?: boolean;
 }) {
   const min = () => props.min ?? 0;
   const pct = () => {
@@ -29,6 +30,7 @@ export function Slider(props: {
       max={props.max}
       step={props.step ?? 1}
       value={props.value}
+      disabled={props.disabled}
       aria-label={props.ariaLabel}
       onInput={(e) => props.onInput(Number(e.currentTarget.value))}
       onChange={(e) => props.onChange?.(Number(e.currentTarget.value))}

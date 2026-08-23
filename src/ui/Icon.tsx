@@ -3,6 +3,7 @@ import { Dynamic } from "solid-js/web";
 import {
   Atom,
   Calendar,
+  Cast,
   Check,
   ChevronRight,
   Clapperboard,
@@ -16,6 +17,7 @@ import {
   Heart,
   Home,
   Image,
+  Laptop,
   Lock,
   Keyboard,
   List,
@@ -23,6 +25,7 @@ import {
   LogOut,
   Mic,
   Menu,
+  MonitorSpeaker,
   MoreVertical,
   Pause,
   Pencil,
@@ -36,6 +39,7 @@ import {
   Search,
   Server,
   Settings,
+  Smartphone,
   Share2,
   SlidersHorizontal,
   Sparkles,
@@ -45,6 +49,7 @@ import {
   Star,
   Tag,
   Trash2,
+  Tv,
   TrendingUp,
   Upload,
   Volume1,
@@ -107,7 +112,12 @@ export type IconName =
   | "radio"
   | "video"
   | "refresh"
-  | "copy";
+  | "copy"
+  | "cast"
+  | "laptop"
+  | "phone"
+  | "tv"
+  | "speaker";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LucideComp = Component<any>;
@@ -169,6 +179,11 @@ const LUCIDE_MAP: Record<IconName, LucideComp> = {
   video: Clapperboard,
   refresh: RefreshCw,
   copy: Copy,
+  cast: Cast,
+  laptop: Laptop,
+  phone: Smartphone,
+  tv: Tv,
+  speaker: MonitorSpeaker,
 };
 
 export interface IconProps {
