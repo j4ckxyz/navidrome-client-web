@@ -47,15 +47,23 @@ interface Deck {
 }
 
 // The Web Audio graph for a single deck:
-//   source → preamp → peaking filters → limiter → destination
+//   source → preamp → peaking filters → [limiter] → destination
 // The limiter is a brick-wall DynamicsCompressor that catches the peaks a band
 // boost can push past 0 dBFS — without it, boosting (e.g. Bass Boost) clips and
-// sounds crackly/distorted.
+// sounds crackly/distorted. It is only in the path while the EQ is on: it is a
+// dynamic gain stage, so anything it touches when it has no work to do just
+// pumps.
 interface EqChain {
   source: MediaElementAudioSourceNode;
   preamp: GainNode;
   filters: BiquadFilterNode[];
   limiter: DynamicsCompressorNode;
+  // Last filter in the chain — the point the limiter is patched in and out of.
+  tail: AudioNode;
+  // Where the chain terminates (the master analyser, or the destination).
+  out: AudioNode;
+  // Whether the limiter is currently wired into the path.
+  limiterWired: boolean;
 }
 
 export interface EngineCallbacks {
@@ -289,11 +297,40 @@ export class AudioEngine {
       node.connect(f);
       node = f;
     }
-    node.connect(limiter);
     // Terminate at the master analyser (which feeds the destination), so the
-    // visualizer sees the fully-processed signal.
-    limiter.connect(this.analyser ?? ctx.destination);
-    return { source, preamp, filters, limiter };
+    // visualizer sees the fully-processed signal. The limiter is patched in
+    // between `tail` and `out` only while the EQ is actually shaping audio —
+    // see setLimiterWired.
+    const out: AudioNode = this.analyser ?? ctx.destination;
+    node.connect(out);
+    return { source, preamp, filters, limiter, tail: node, out, limiterWired: false };
+  }
+
+  // Patch the limiter in or out of the chain.
+  //
+  // It has to be *disconnected*, not just set to a high threshold: a
+  // DynamicsCompressor with threshold 0 dBFS is not a bypass. It still reduces
+  // gain on every peak that reaches full scale — which, on a loudness-war
+  // master, is most of them — and with a 250 ms release that reads as the audio
+  // breathing louder and quieter. Since the graph is also built by the
+  // visualizer (not just the EQ), leaving it wired meant merely opening the
+  // full-screen player put a limiter on everything for the rest of the session.
+  private setLimiterWired(chain: EqChain, wired: boolean): void {
+    if (chain.limiterWired === wired) return;
+    try {
+      if (wired) {
+        chain.tail.disconnect(chain.out);
+        chain.tail.connect(chain.limiter);
+        chain.limiter.connect(chain.out);
+      } else {
+        chain.tail.disconnect(chain.limiter);
+        chain.limiter.disconnect(chain.out);
+        chain.tail.connect(chain.out);
+      }
+      chain.limiterWired = wired;
+    } catch (err) {
+      console.warn("Equalizer: could not re-patch the limiter", err);
+    }
   }
 
   // Push the current gains/pre-amp to the live nodes. When inactive, flatten to
@@ -312,9 +349,10 @@ export class AudioEngine {
       chain.filters.forEach((f, i) => {
         f.gain.value = this.eqActive ? this.eqGains[i] ?? 0 : 0;
       });
-      // Engage the limiter only when shaping audio; transparent (threshold at
-      // the ceiling) when the EQ is off so passthrough stays bit-clean.
-      chain.limiter.threshold.value = this.eqActive ? -2 : 0;
+      // Engage the limiter only when shaping audio; with the EQ off it leaves
+      // the graph entirely so passthrough is bit-clean.
+      chain.limiter.threshold.value = -2;
+      this.setLimiterWired(chain, this.eqActive);
     }
   }
 
