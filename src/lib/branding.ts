@@ -11,7 +11,19 @@ export const APP_NAME = "Tonearm";
 export const APP_TAGLINE = "your library, your rules";
 export const APP_DESCRIPTION =
   "A modern, desktop-first web client for your Navidrome or Jellyfin music library";
-export const APP_VERSION = "1.0.0";
+// Injected by Vite from package.json at build time — see vite.config.ts. Never
+// hardcode it: the previous constant had drifted to 1.0.0 against a 0.2.2
+// package, so every Jellyfin device entry reported a version that didn't exist.
+declare const __APP_VERSION__: string;
+declare const __COMMIT_HASH__: string;
+
+export const APP_VERSION: string =
+  typeof __APP_VERSION__ === "string" && __APP_VERSION__ ? __APP_VERSION__ : "0.0.0";
+
+// The commit this bundle was built from. Empty in a Docker build, where .git
+// isn't in the build context — the version is the identity there.
+export const APP_COMMIT: string =
+  typeof __COMMIT_HASH__ === "string" ? __COMMIT_HASH__ : "";
 
 // Identifier announced to Subsonic servers as the `c` parameter. Navidrome
 // creates one "player" record per client name and hangs its per-player

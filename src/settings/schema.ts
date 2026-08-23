@@ -167,6 +167,14 @@ export interface Settings {
     displayName: string; // overrides the server username in greetings; "" = use username
   };
 
+  updates: {
+    // Check GitHub on load and periodically, rather than only when asked.
+    autoCheck: boolean;
+    // Install automatically when one is found. Only possible where the
+    // deployment opted into self-update; ignored otherwise.
+    autoInstall: boolean;
+  };
+
   desktop: {
     appIcon: AppIconVariant;
     checkForUpdatesOnLaunch: boolean;
@@ -547,6 +555,7 @@ export const DEFAULT_SETTINGS: Settings = {
   profile: {
     displayName: "",
   },
+  updates: { autoCheck: true, autoInstall: false },
   desktop: {
     appIcon: "ocean",
     checkForUpdatesOnLaunch: true,

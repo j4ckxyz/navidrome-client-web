@@ -15,7 +15,7 @@
 import { Hono, type Context } from "hono";
 import {
   mkdirSync, readdirSync, statSync, renameSync,
-  copyFileSync, unlinkSync, existsSync,
+  copyFileSync, unlinkSync, existsSync, readFileSync,
 } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { createHash, randomBytes } from "node:crypto";
@@ -188,6 +188,41 @@ app.get("/api/config", (c) =>
 //   POST /api/update/apply — actually runs the updater. Admin-verified, opt-in,
 //        and refuses unless the prerequisites are really present.
 
+// The release version this build came from. Always available: package.json is
+// copied into the image, so unlike the commit hash this never comes back empty.
+// It is what makes the update check work on an image built without the build
+// arg — the common case, since `docker compose up --build` doesn't set one.
+let cachedVersion: string | null = null;
+function runningVersion(): string {
+  if (cachedVersion !== null) return cachedVersion;
+  try {
+    const pkg = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
+      version?: string;
+    };
+    cachedVersion = (pkg.version ?? "").trim();
+  } catch {
+    cachedVersion = "";
+  }
+  return cachedVersion;
+}
+
+// Compare two semver-ish strings. Returns >0 when `a` is newer than `b`.
+function compareVersions(a: string, b: string): number {
+  const parse = (v: string) =>
+    v
+      .replace(/^v/i, "")
+      .split(/[.\-+]/)
+      .map((part) => Number.parseInt(part, 10))
+      .map((n) => (Number.isFinite(n) ? n : 0));
+  const pa = parse(a);
+  const pb = parse(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
 // The commit this server is running. In Docker it comes from the build arg; from
 // a bare checkout, ask git.
 let cachedCommit: string | null = null;
@@ -240,6 +275,9 @@ function computeSelfUpdateReady(): boolean {
 interface UpdateStatus {
   current: string;
   latest: string;
+  // Release versions, which are always known even when the commit isn't.
+  currentVersion: string;
+  latestVersion: string;
   behind: number | null; // commits behind, when GitHub could compare them
   updateAvailable: boolean;
   publishedAt?: string;
@@ -271,9 +309,12 @@ async function ghJson(path: string): Promise<any | null> {
 
 async function fetchUpdateStatus(): Promise<UpdateStatus> {
   const current = runningCommit();
+  const currentVersion = runningVersion();
   const base: UpdateStatus = {
     current,
     latest: "",
+    currentVersion,
+    latestVersion: "",
     behind: null,
     updateAvailable: false,
     repo: UPDATE_REPO,
@@ -281,23 +322,41 @@ async function fetchUpdateStatus(): Promise<UpdateStatus> {
     canSelfUpdate: selfUpdateReady(),
   };
 
-  const head = await ghJson(`/repos/${UPDATE_REPO}/commits/${UPDATE_BRANCH}`);
+  // Releases are fetched alongside the branch head so a build with no recorded
+  // commit can still be compared — by version instead.
+  const [head, release] = await Promise.all([
+    ghJson(`/repos/${UPDATE_REPO}/commits/${UPDATE_BRANCH}`),
+    ghJson(`/repos/${UPDATE_REPO}/releases/latest`),
+  ]);
   if (!head?.sha) {
     return { ...base, error: "Could not reach GitHub to check for updates." };
   }
 
   const latest = String(head.sha);
+  const latestVersion = String(release?.tag_name ?? "").replace(/^v/i, "");
   const status: UpdateStatus = {
     ...base,
     latest,
+    latestVersion,
     publishedAt: head.commit?.author?.date,
     message: String(head.commit?.message ?? "").split("\n")[0],
     updateAvailable: !!current && current !== latest,
   };
 
   if (!current) {
-    // A build with no recorded commit (e.g. an image built without the build
-    // arg). We can show what's newest, but not whether we're behind it.
+    // No recorded commit — an image built without the build arg, which is what
+    // a plain `docker compose up --build` produces. Fall back to comparing
+    // release versions, which are baked into package.json and always present.
+    if (currentVersion && latestVersion) {
+      const behindByVersion = compareVersions(latestVersion, currentVersion) > 0;
+      return {
+        ...status,
+        updateAvailable: behindByVersion,
+        compareUrl: behindByVersion
+          ? `https://github.com/${UPDATE_REPO}/compare/v${currentVersion}...v${latestVersion}`
+          : undefined,
+      };
+    }
     return { ...status, updateAvailable: false, error: "This build didn't record its version." };
   }
   if (!status.updateAvailable) return status;
