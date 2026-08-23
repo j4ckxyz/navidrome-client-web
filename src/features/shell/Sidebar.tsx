@@ -17,6 +17,13 @@ import { uploadEnabled } from "~/lib/serverConfig";
 import { qk, queryClient } from "~/lib/query";
 import { APP_NAME } from "~/lib/branding";
 import { Icon, type IconName } from "~/ui/Icon";
+import { log } from "~/lib/log";
+import {
+  playlistDropTarget,
+  readSongIds,
+  setPlaylistDropTarget,
+  SONGS_MIME,
+} from "~/features/playlists/dragToPlaylist";
 import "./sidebar.css";
 
 const NAV: { href: string; label: string; icon: IconName; end?: boolean }[] = [
@@ -26,6 +33,7 @@ const NAV: { href: string; label: string; icon: IconName; end?: boolean }[] = [
   { href: "/genres", label: "Genres", icon: "tag" },
   { href: "/favourites", label: "Favourites", icon: "heart" },
   { href: "/radio", label: "Radio", icon: "radio" },
+  { href: "/history", label: "History", icon: "clock" },
   { href: "/recap", label: "Recap", icon: "trending" },
   { href: "/stats", label: "Stats", icon: "server" },
 ];
@@ -35,6 +43,22 @@ export function Sidebar(props: { onUpload?: () => void; onNavigate?: () => void 
   const go = () => props.onNavigate?.();
   const [creating, setCreating] = createSignal(false);
   const [newName, setNewName] = createSignal("");
+
+  // Drop tracks onto a playlist in the sidebar. The list is refetched rather
+  // than patched locally so the count reflects whatever the server actually
+  // accepted (it de-duplicates on some backends).
+  async function addSongsToPlaylist(id: string, name: string, songIds: string[]): Promise<void> {
+    const c = client();
+    if (!c || songIds.length === 0) return;
+    try {
+      await c.updatePlaylist(id, { songIdToAdd: songIds });
+      queryClient.invalidateQueries({ queryKey: qk.playlists() });
+      queryClient.invalidateQueries({ queryKey: qk.playlist(id) });
+      log.info("playlists", `added ${songIds.length} track(s) to ${name}`);
+    } catch (err) {
+      log.error("playlists", `could not add to ${name}`, err);
+    }
+  }
 
   const playlists = createQuery(() => ({
     queryKey: qk.playlists(),
@@ -141,7 +165,27 @@ export function Sidebar(props: { onUpload?: () => void; onNavigate?: () => void 
         <div class="sidebar-playlist-list">
           <For each={myPlaylists()}>
             {(pl) => (
-              <A href={`/playlist/${pl.id}`} class="sidebar-link sidebar-playlist" activeClass="sidebar-link-active" onClick={go}>
+              <A
+                href={`/playlist/${pl.id}`}
+                class="sidebar-link sidebar-playlist"
+                classList={{ "sidebar-playlist-drop": playlistDropTarget() === pl.id }}
+                activeClass="sidebar-link-active"
+                onClick={go}
+                onDragOver={(e) => {
+                  // Only claim the drop if it's actually tracks; anything else
+                  // should fall through to the browser's default handling.
+                  if (!e.dataTransfer?.types.includes(SONGS_MIME)) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "copy";
+                  setPlaylistDropTarget(pl.id);
+                }}
+                onDragLeave={() => setPlaylistDropTarget(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setPlaylistDropTarget(null);
+                  void addSongsToPlaylist(pl.id, pl.name, readSongIds(e.dataTransfer));
+                }}
+              >
                 <Icon name="list" size={17} />
                 <span class="sidebar-playlist-name">{pl.name}</span>
                 <Show when={pl.public}>

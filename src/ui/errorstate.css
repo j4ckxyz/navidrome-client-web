@@ -1,0 +1,49 @@
+/* Recovery panel shown by ErrorBoundary. Deliberately plain: it has to render
+   correctly even when whatever broke was a styling or data assumption. */
+.error-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  min-height: 320px;
+  height: 100%;
+}
+.error-state-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 560px;
+  width: 100%;
+}
+.error-state-inner h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+.error-state-inner > p {
+  margin: 0;
+  line-height: 1.55;
+}
+.error-state-detail {
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.error-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}

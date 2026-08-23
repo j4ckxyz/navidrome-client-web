@@ -11,7 +11,11 @@ const VERSION = "v1";
 const SHELL_CACHE = `nd-shell-${VERSION}`;
 const ASSET_CACHE = "nd-assets-v1";
 const ART_CACHE = "nd-art-v1";
-const ART_LIMIT = 300;
+// Artwork is trimmed by bytes, not entry count: the setting is a megabyte
+// budget, and a 4000px cover and a 96px thumbnail are three orders of magnitude
+// apart in size, so counting entries told the user nothing useful.
+const DEFAULT_ART_BUDGET_BYTES = 150 * 1024 * 1024;
+let artBudgetBytes = DEFAULT_ART_BUDGET_BYTES;
 // Hashed assets change name every deploy; trim so old builds don't pile up.
 const ASSET_LIMIT = 80;
 
@@ -56,6 +60,55 @@ async function trimCache(name, limit) {
   // Cache keys come back oldest-first; drop from the front.
   for (let i = 0; i < keys.length - limit; i++) await cache.delete(keys[i]);
 }
+
+// Evict oldest-first until the cache fits the byte budget. Reading every entry
+// to size it is why this is debounced rather than run on each store.
+async function trimCacheBySize(name, budgetBytes) {
+  const cache = await caches.open(name);
+  const keys = await cache.keys();
+  const sizes = await Promise.all(
+    keys.map(async (key) => {
+      const res = await cache.match(key);
+      if (!res) return 0;
+      const declared = Number(res.headers.get("content-length"));
+      if (Number.isFinite(declared) && declared > 0) return declared;
+      // Opaque cross-origin responses report no length; measuring costs a read.
+      try {
+        return (await res.clone().blob()).size;
+      } catch {
+        return 0;
+      }
+    }),
+  );
+  let total = sizes.reduce((sum, n) => sum + n, 0);
+  for (let i = 0; i < keys.length && total > budgetBytes; i++) {
+    await cache.delete(keys[i]);
+    total -= sizes[i];
+  }
+}
+
+// Sizing the whole cache on every stored image would be pathological during a
+// scroll through an album grid, so coalesce into one pass.
+let artTrimTimer = null;
+function scheduleArtTrim() {
+  if (artTrimTimer !== null) return;
+  artTrimTimer = setTimeout(() => {
+    artTrimTimer = null;
+    trimCacheBySize(ART_CACHE, artBudgetBytes);
+  }, 10_000);
+}
+
+// The app sends the budget on boot and whenever the setting changes. A worker
+// can't read localStorage, so this is the only way it learns the value.
+self.addEventListener("message", (event) => {
+  const data = event.data;
+  if (!data || data.type !== "art-budget") return;
+  const mb = Number(data.megabytes);
+  if (Number.isFinite(mb) && mb > 0) {
+    artBudgetBytes = mb * 1024 * 1024;
+    scheduleArtTrim();
+  }
+});
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
@@ -110,7 +163,7 @@ self.addEventListener("fetch", (event) => {
           .then((res) => {
             if (res.ok || res.type === "opaque") {
               cache.put(req, res.clone());
-              trimCache(ART_CACHE, ART_LIMIT);
+              scheduleArtTrim();
             }
             return res;
           })

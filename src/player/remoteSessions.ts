@@ -17,14 +17,28 @@
 import { createEffect, createMemo, createRoot, createSignal, on } from "solid-js";
 import type { JfSessionInfo } from "~/api/jellyfin";
 import type { Song } from "~/api/types";
+import { log } from "~/lib/log";
+import { settings } from "~/settings/store";
 import { onSocketMessage, onSocketOpen, sendSocket, socketClient } from "./jellyfinSocket";
 
 const TARGET_KEY = "nd:remote-target";
 
-// How often the server pushes Sessions updates over the socket, and the floor
-// under which a device that has gone quiet is treated as gone. Jellyfin keeps
-// dead sessions listed for a while, which would leave ghosts in the picker.
-const SESSIONS_PUSH_MS = 1_500;
+// How often the server pushes Sessions updates over the socket. This is the
+// "Now-playing poll interval" setting: it decides how quickly another device's
+// track, position and volume refresh here. Clamped because Jellyfin treats the
+// value as a hint and a very low one is just wasted traffic.
+const PUSH_MIN_MS = 500;
+const PUSH_MAX_MS = 15_000;
+
+function pushIntervalMs(): number {
+  const configured = settings.power.polling.nowPlayingMs;
+  if (!Number.isFinite(configured) || configured <= 0) return 1_500;
+  return Math.round(Math.min(PUSH_MAX_MS, Math.max(PUSH_MIN_MS, configured)));
+}
+
+// The floor under which a device that has gone quiet is treated as gone.
+// Jellyfin keeps dead sessions listed for a while, which would leave ghosts in
+// the picker.
 const STALE_AFTER_MS = 5 * 60_000;
 
 export interface RemoteDevice {
@@ -150,8 +164,9 @@ export async function refreshRemoteDevices(): Promise<void> {
   if (!jf) return;
   try {
     ingest(await jf.getSessions());
-  } catch {
+  } catch (err) {
     // Server down or user lacks permission — leave the last known list.
+    log.warn("remote", "could not list sessions", err);
   }
 }
 
@@ -172,10 +187,8 @@ function target(): RemoteDevice | null {
 let commandChain: Promise<unknown> = Promise.resolve();
 
 function enqueue(send: () => Promise<unknown>): void {
-  commandChain = commandChain.then(
-    () => send().catch(() => {}),
-    () => send().catch(() => {}),
-  );
+  const run = () => send().catch((err) => log.warn("remote", "command failed", err));
+  commandChain = commandChain.then(run, run);
 }
 
 export function remotePlaystate(command: string, seekPositionTicks?: number): void {
@@ -223,9 +236,23 @@ export function installRemoteSessions(): void {
     // Sessions updates are a socket subscription, not a server setting, so they
     // have to be re-armed on every reconnect.
     onSocketOpen(() => {
-      sendSocket("SessionsStart", `0,${SESSIONS_PUSH_MS}`);
+      sendSocket("SessionsStart", `0,${pushIntervalMs()}`);
       void refreshRemoteDevices();
     });
+
+    // Changing the interval has to re-issue the subscription: it's a property of
+    // the running subscription, not something the server re-reads.
+    createEffect(
+      on(
+        () => settings.power.polling.nowPlayingMs,
+        () => {
+          if (!socketClient()) return;
+          sendSocket("SessionsStop");
+          sendSocket("SessionsStart", `0,${pushIntervalMs()}`);
+        },
+        { defer: true },
+      ),
+    );
 
     onSocketMessage((msg) => {
       if (msg.MessageType !== "Sessions") return;

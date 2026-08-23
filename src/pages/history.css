@@ -1,0 +1,189 @@
+/* Listening history: a dense, time-ordered log. Rows are tighter than a normal
+   tracklist because the timestamp is the primary column, not the artwork. */
+.history-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.history-head h1 {
+  font-size: 25px;
+  font-weight: var(--fw-bold);
+  letter-spacing: -0.02em;
+}
+.history-sub {
+  font-size: 13px;
+  margin-top: 4px;
+}
+.history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.history-ranges {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface);
+  border-radius: var(--radius);
+}
+.history-ranges .btn {
+  font-size: 12.5px;
+  padding: 6px 12px;
+}
+.history-range-active {
+  background: var(--accent) !important;
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.btn-danger {
+  background: var(--danger);
+  color: var(--on-danger);
+  font-weight: 600;
+}
+
+.history-section-title {
+  font-size: 15px;
+  font-weight: var(--fw-semibold);
+  margin: 26px 0 10px;
+}
+.history-day-count {
+  font-weight: 400;
+  font-size: 13px;
+}
+
+.history-top-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+}
+.history-top-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+}
+.history-top-item:hover {
+  background: var(--surface-hover);
+}
+.history-top-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  font-size: 13px;
+}
+.history-top-title,
+.history-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-top-meta .muted {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-plays {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+}
+.history-row {
+  display: grid;
+  grid-template-columns: 52px 26px auto 1fr minmax(0, 0.7fr) 44px 38px;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+}
+.history-row:hover {
+  background: var(--surface);
+}
+.history-time {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.history-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  opacity: 0;
+  cursor: pointer;
+  color: var(--content-text);
+}
+.history-row:hover .history-play {
+  opacity: 1;
+}
+.history-play:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.history-cover {
+  border-radius: 3px;
+  flex: none;
+}
+.history-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 13.5px;
+}
+.history-meta .muted {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-link:hover {
+  text-decoration: underline;
+}
+.history-album {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-album:hover {
+  text-decoration: underline;
+}
+.history-dur {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.history-queue {
+  opacity: 0;
+  width: 30px;
+  height: 30px;
+}
+.history-row:hover .history-queue {
+  opacity: 1;
+}
+
+@media (max-width: 900px) {
+  .history-row {
+    grid-template-columns: 46px 0 auto 1fr 40px 0;
+  }
+  .history-play,
+  .history-album,
+  .history-queue {
+    display: none;
+  }
+}

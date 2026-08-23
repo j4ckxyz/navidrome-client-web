@@ -4,6 +4,8 @@
 import { For, Show } from "solid-js";
 import type { Song } from "~/api/types";
 import { settings } from "~/settings/store";
+import { handleRowClick, isSelected } from "~/features/selection";
+import { dragPayloadFor } from "~/features/playlists/dragToPlaylist";
 import { TrackRow } from "./TrackRow";
 
 export function SongList(props: {
@@ -16,6 +18,16 @@ export function SongList(props: {
   onRemoveFromPlaylist?: (index: number) => void;
   // Song id to visually highlight (deep-linked track from /song/:id).
   highlightId?: string;
+  // Identity of this list, enabling multi-select. Selection is scoped to one
+  // list at a time, so this must be stable for the list and distinct from other
+  // lists (an album id, playlist id, search term…). Omit to disable selection.
+  selectionId?: string;
+  // When one logical list is rendered as several SongLists (an album split by
+  // disc), pass the whole list and this chunk's offset into it. Without them a
+  // shift-click range would be measured against disc-local indices and select
+  // the wrong tracks.
+  selectionContext?: Song[];
+  selectionOffset?: number;
 }) {
   const numberFor = (song: Song, i: number) => {
     if (props.numbering === "none") return undefined;
@@ -54,6 +66,21 @@ export function SongList(props: {
             showCover={props.showCover}
             showAlbum={props.showAlbum}
             highlighted={props.highlightId === song.id}
+            selected={!!props.selectionId && isSelected(props.selectionId, song.id)}
+            dragSongIds={() =>
+              dragPayloadFor(song, props.selectionId, props.selectionContext ?? props.songs)
+            }
+            onRowClick={
+              props.selectionId
+                ? (e) =>
+                    handleRowClick(
+                      props.selectionId!,
+                      (props.selectionOffset ?? 0) + i(),
+                      props.selectionContext ?? props.songs,
+                      e,
+                    )
+                : undefined
+            }
             onRemoveFromPlaylist={
               props.onRemoveFromPlaylist ? () => props.onRemoveFromPlaylist!(i()) : undefined
             }

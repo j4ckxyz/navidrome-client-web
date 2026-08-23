@@ -12,6 +12,7 @@ import { settings } from "~/settings/store";
 import { proxyMode } from "~/lib/serverConfig";
 import { canPlayContainer } from "~/lib/codecs";
 import { nextRadioBatch } from "~/lib/recommendations";
+import { loadHistory, recordPlay } from "~/features/history/history";
 import { AudioEngine, type DeckTrack } from "./engine";
 import { socketClient } from "./jellyfinSocket";
 import {
@@ -43,7 +44,19 @@ interface PlayerState {
   repeat: RepeatMode;
 }
 
-const QUEUE_KEY = "nd:queue";
+// The queue is stored per server. Track ids only mean something on the server
+// they came from, so a queue restored across a Navidrome↔Jellyfin switch — the
+// documented way to try the other backend — would be dead on arrival.
+const QUEUE_PREFIX = "nd:queue";
+// The pre-namespacing key. It can't be adopted for the current server because
+// there's no record of which server it belonged to, and guessing wrong
+// reproduces exactly the bug the namespacing fixes.
+const LEGACY_QUEUE_KEY = "nd:queue";
+
+function queueKey(): string | null {
+  const url = client()?.serverUrl;
+  return url ? `${QUEUE_PREFIX}:${url}` : null;
+}
 
 function createPlayer() {
   const [state, setState] = createStore<PlayerState>({
@@ -523,6 +536,29 @@ function createPlayer() {
     }),
   );
 
+  // Changing server invalidates the queue in memory too, not just on disk: the
+  // loaded tracks belong to the server we just left. `defer` skips the initial
+  // run so boot-time restoreQueue() isn't undone.
+  createEffect(
+    on(
+      client,
+      () => {
+        stopRemoteTicker();
+        releasePrefetched();
+        reportStop(engine.getCurrentTime());
+        engine.stop();
+        localSnapshot = null;
+        remoteQueueKey = "";
+        remoteQueueSongs = [];
+        resumeAt = 0;
+        setState({ queue: [], index: -1, isPlaying: false, currentTime: 0, duration: 0 });
+        restoreQueue();
+        loadHistory();
+      },
+      { defer: true },
+    ),
+  );
+
   // --- Public actions ---
 
   function playNow(songs: Song[], startIndex = 0): void {
@@ -540,8 +576,7 @@ function createPlayer() {
       // Keep the chosen track first, shuffle the rest.
       const chosen = songs[startIndex];
       const rest = songs.filter((_, i) => i !== startIndex);
-      shuffleInPlace(rest);
-      queue = [chosen, ...rest];
+      queue = [chosen, ...shuffleSpreadingArtists(rest, chosen?.artist)];
       index = 0;
     }
     setState({ queue: [...queue], index: -1 });
@@ -965,6 +1000,9 @@ function createPlayer() {
   }
 
   function notifyNowPlaying(song: Song): void {
+    // Local history is independent of the scrobble setting: it never leaves the
+    // browser, and it's what makes "what was that track?" answerable.
+    recordPlay(song);
     if (song.isRadio) return; // not a library track — nothing to report
     if (!settings.playback.scrobble) return;
     reportEvent("start", state.currentTime);
@@ -995,9 +1033,11 @@ function createPlayer() {
     // While remote, `state.queue` is the other device's queue — persisting it
     // would overwrite the local one that's waiting to be restored.
     if (isRemote()) return;
+    const key = queueKey();
+    if (!key) return;
     try {
       localStorage.setItem(
-        QUEUE_KEY,
+        key,
         JSON.stringify({ queue: state.queue, index: state.index, time: state.currentTime }),
       );
     } catch {
@@ -1007,8 +1047,12 @@ function createPlayer() {
 
   function restoreQueue(): void {
     if (!settings.playback.resumeQueueOnLaunch) return;
+    const key = queueKey();
+    if (!key) return;
     try {
-      const raw = localStorage.getItem(QUEUE_KEY);
+      // One-time cleanup of the un-namespaced key from before this was split.
+      localStorage.removeItem(LEGACY_QUEUE_KEY);
+      const raw = localStorage.getItem(key);
       if (!raw) return;
       const data = JSON.parse(raw) as { queue: Song[]; index: number; time?: number };
       if (Array.isArray(data.queue) && data.queue.length > 0) {
@@ -1087,6 +1131,79 @@ function shuffleInPlace<T>(arr: T[]): void {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
+}
+
+// Shuffle, then spread each artist out.
+//
+// A uniform shuffle is statistically correct and sounds broken: run three tracks
+// by the same artist together and people reach for the skip button, because a
+// shuffle that clumps doesn't feel random even though it is. Every large music
+// player biases against this for exactly that reason.
+//
+// The method is greedy: repeatedly take from whichever artist has the most
+// tracks left, excluding the one just played. Always spending the *most
+// constrained* artist first is what stops a dominant artist's leftovers piling
+// up at the end — the failure mode of the more obvious round-robin deal, which
+// measured no better than a plain shuffle. This reaches the theoretical minimum
+// number of adjacent repeats, which is zero unless one artist holds more than
+// half the queue.
+//
+// Randomness survives because the buckets are shuffled before dealing and their
+// iteration order comes from that shuffle, so ties break differently each call.
+function shuffleSpreadingArtists(songs: Song[], afterArtist?: string): Song[] {
+  if (songs.length < 3) {
+    const copy = [...songs];
+    shuffleInPlace(copy);
+    return copy;
+  }
+
+  const shuffled = [...songs];
+  shuffleInPlace(shuffled);
+
+  const keyFor = (song: Song) => (song.artist ?? "").toLowerCase() || `\u0000${song.id}`;
+
+  const buckets = new Map<string, Song[]>();
+  for (const song of shuffled) {
+    // Album artist would group a compilation under one name and defeat the
+    // spreading; the track artist is what a listener actually hears repeat.
+    const key = keyFor(song);
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(song);
+    else buckets.set(key, [song]);
+  }
+
+  // Nothing to spread — every track is a different artist.
+  if (buckets.size === shuffled.length) return shuffled;
+
+  const out: Song[] = [];
+  // Seeded with the track this queue is being appended after, so the very first
+  // pick doesn't collide with the track the user actually chose.
+  let lastKey = afterArtist ? afterArtist.toLowerCase() : null;
+
+  while (out.length < shuffled.length) {
+    let bestKey: string | null = null;
+    let bestCount = 0;
+    for (const [key, bucket] of buckets) {
+      if (bucket.length === 0 || key === lastKey) continue;
+      if (bucket.length > bestCount) {
+        bestCount = bucket.length;
+        bestKey = key;
+      }
+    }
+    // Only the artist we just played has anything left: an unavoidable repeat.
+    if (bestKey === null) {
+      for (const [key, bucket] of buckets) {
+        if (bucket.length > 0) {
+          bestKey = key;
+          break;
+        }
+      }
+    }
+    if (bestKey === null) break;
+    out.push(buckets.get(bestKey)!.shift()!);
+    lastKey = bestKey;
+  }
+  return out;
 }
 
 // Single app-wide player instance, owned by a root so reactivity has an owner.

@@ -9,6 +9,8 @@ import type { Song } from "~/api/types";
 import { qk, queryClient } from "~/lib/query";
 import { player } from "~/player/store";
 import { TrackRow } from "~/ui/TrackRow";
+import { SelectionBar } from "~/features/SelectionBar";
+import { handleRowClick, isSelected } from "~/features/selection";
 import { CoverArt } from "~/ui/CoverArt";
 import { Icon } from "~/ui/Icon";
 import { MenuButton } from "~/ui/Menu";
@@ -20,6 +22,7 @@ import "./playlist.css";
 
 export default function PlaylistDetail() {
   const params = useParams<{ id: string }>();
+  const selectionId = () => `playlist:${params.id}`;
   const navigate = useNavigate();
 
   const q = createQuery(() => ({
@@ -311,12 +314,15 @@ export default function PlaylistDetail() {
                           contextIndex={i()}
                           showAlbum
                           onRemoveFromPlaylist={() => removeAt(i())}
+                          selected={isSelected(selectionId(), song.id)}
+                          onRowClick={(e) => handleRowClick(selectionId(), i(), order(), e)}
                         />
                       </div>
                     </div>
                   )}
                 </For>
               </Show>
+              <SelectionBar listId={selectionId()} songs={order()} />
             </>
           )}
         </Show>

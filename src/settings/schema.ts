@@ -213,11 +213,10 @@ export interface Settings {
 
   power: {
     shortcuts: Record<ShortcutAction, string>;
-    prefetch: { enabled: boolean; nextTrackCount: number };
+    prefetch: { enabled: boolean };
     coverArtCacheMB: number;
     polling: { nowPlayingMs: number; libraryStaleMs: number };
-    developer: { debugPanel: boolean; showRawApiResponses: boolean; logLevel: LogLevel };
-    featureFlags: Record<string, boolean>;
+    developer: { debugPanel: boolean; logLevel: LogLevel };
   };
 }
 
@@ -593,10 +592,9 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   power: {
     shortcuts: { ...DEFAULT_SHORTCUTS },
-    prefetch: { enabled: true, nextTrackCount: 1 },
+    prefetch: { enabled: true },
     coverArtCacheMB: 100,
-    polling: { nowPlayingMs: 5000, libraryStaleMs: 300000 },
-    developer: { debugPanel: false, showRawApiResponses: false, logLevel: "error" },
-    featureFlags: {},
+    polling: { nowPlayingMs: 2000, libraryStaleMs: 300000 },
+    developer: { debugPanel: false, logLevel: "error" },
   },
 };

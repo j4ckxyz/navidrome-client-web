@@ -6,7 +6,9 @@ import { onCleanup } from "solid-js";
 import { player } from "~/player/store";
 import { settings, updateSettings } from "~/settings/store";
 import { toggleStar } from "~/features/stars";
+import { clearSelection, selectionCount } from "~/features/selection";
 import { requestSearchFocus } from "./searchFocus";
+import { openCommandPalette } from "./CommandPalette";
 import { setShowShortcuts } from "./ShortcutsHelpDialog";
 import type { ShortcutAction } from "~/settings/schema";
 import {
@@ -41,12 +43,27 @@ const ACTIONS: Record<ShortcutAction, () => void> = {
 
 export function installShortcuts(): void {
   const handler = (e: KeyboardEvent) => {
+    // The palette is reachable from anywhere, including a text field — it's the
+    // way out of whatever you're doing, so it comes before the typing guard.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      openCommandPalette();
+      return;
+    }
     if (isTypingTarget(e.target)) return;
     const combo = keyFromEvent(e);
 
     if (combo === "?" || combo === "Shift+?") {
       e.preventDefault();
       setShowShortcuts((v) => !v);
+      return;
+    }
+
+    // Escape drops a track selection before anything else can claim it — it's
+    // the universal "never mind" and shouldn't need a configurable binding.
+    if (e.key === "Escape" && selectionCount() > 0) {
+      e.preventDefault();
+      clearSelection();
       return;
     }
 

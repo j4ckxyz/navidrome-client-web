@@ -1,11 +1,12 @@
 // Top-level app: shows the login screen until there's an authenticated client,
 // otherwise mounts the router with the app shell as the persistent layout.
 
-import { createEffect, lazy, onMount, Show } from "solid-js";
+import { createEffect, ErrorBoundary, lazy, onMount, Show } from "solid-js";
 import { Route, Router } from "@solidjs/router";
 import { client, reauthRequired, activeServerUrl, activeUsername } from "~/auth/session";
 import { LoginScreen } from "~/auth/LoginScreen";
 import { AppShell } from "~/features/shell/AppShell";
+import { ErrorState } from "~/ui/ErrorState";
 import { applyDesktopAppIcon, startDesktopWindowDrag } from "~/lib/desktopShell";
 import { isTauriDesktop } from "~/lib/runtime";
 import { settings } from "~/settings/store";
@@ -27,6 +28,7 @@ const SongLink = lazy(() => import("~/pages/SongLink"));
 const Settings = lazy(() => import("~/pages/Settings"));
 const Wrapped = lazy(() => import("~/pages/Wrapped"));
 const Stats = lazy(() => import("~/pages/Stats"));
+const History = lazy(() => import("~/pages/History"));
 
 export function App() {
   createEffect(() => {
@@ -40,7 +42,7 @@ export function App() {
   });
 
   return (
-    <>
+    <ErrorBoundary fallback={(err, reset) => <ErrorState error={err} reset={reset} fatal />}>
       <div
         class="native-titlebar"
         data-tauri-drag-region
@@ -73,10 +75,11 @@ export function App() {
           <Route path="/listen/:artist/:id/:view?" component={Listen} />
           <Route path="/recap" component={Wrapped} />
           <Route path="/stats" component={Stats} />
+          <Route path="/history" component={History} />
           <Route path="/settings" component={Settings} />
           <Route path="*" component={Home} />
         </Router>
       </Show>
-    </>
+    </ErrorBoundary>
   );
 }

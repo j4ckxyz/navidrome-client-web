@@ -11,6 +11,7 @@ import { AsyncState } from "~/ui/AsyncState";
 import { SongList } from "~/ui/SongList";
 import { Icon } from "~/ui/Icon";
 import { formatCount } from "~/lib/format";
+import { SelectionBar } from "~/features/SelectionBar";
 
 export default function GenreDetail() {
   const params = useParams<{ name: string }>();
@@ -45,7 +46,17 @@ export default function GenreDetail() {
           </button>
           <span class="muted">{formatCount(songs().length, "track")}</span>
         </div>
-        <SongList songs={songs()} showCover showAlbum showHeader numbering="index" />
+        <>
+          <SongList
+            songs={songs()}
+            showCover
+            showAlbum
+            showHeader
+            numbering="index"
+            selectionId={`genre:${params.name}`}
+          />
+          <SelectionBar listId={`genre:${params.name}`} songs={songs()} />
+        </>
       </AsyncState>
     </div>
   );

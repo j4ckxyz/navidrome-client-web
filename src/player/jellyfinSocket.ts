@@ -15,6 +15,7 @@
 import { createEffect, createRoot, createSignal, on } from "solid-js";
 import { JellyfinClient } from "~/api/jellyfin";
 import { client } from "~/auth/session";
+import { log } from "~/lib/log";
 
 export interface SocketMessage {
   MessageType?: string;
@@ -92,6 +93,7 @@ class SocketChannel {
     socket.addEventListener("open", () => {
       this.retries = 0;
       setConnected(true);
+      log.info("jellyfin-socket", "connected");
       // Jellyfin expects periodic keep-alives; without them it drops the
       // session and the device disappears from the dashboard.
       this.keepAlive = setInterval(() => this.send("KeepAlive"), KEEPALIVE_MS);
@@ -144,6 +146,7 @@ class SocketChannel {
     if (this.closed || this.retryTimer) return;
     const delay = Math.min(RETRY_BASE_MS * 2 ** this.retries, RETRY_MAX_MS);
     this.retries++;
+    log.warn("jellyfin-socket", `disconnected; retrying in ${delay}ms`);
     this.retryTimer = setTimeout(() => {
       this.retryTimer = undefined;
       this.connect();

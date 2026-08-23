@@ -17,6 +17,7 @@ import { ArtistCard } from "~/ui/ArtistCard";
 import { SongList } from "~/ui/SongList";
 import { AsyncState } from "~/ui/AsyncState";
 import { Icon } from "~/ui/Icon";
+import { SelectionBar } from "~/features/SelectionBar";
 import "./search.css";
 
 export default function Search() {
@@ -112,7 +113,17 @@ export default function Search() {
 
           <Show when={(q.data?.song.length ?? 0) > 0}>
             <h2 class="section-title">Tracks</h2>
-            <SongList songs={q.data!.song} showCover showAlbum showHeader numbering="index" />
+            <>
+              <SongList
+                songs={q.data!.song}
+                showCover
+                showAlbum
+                showHeader
+                numbering="index"
+                selectionId={`search:${query()}`}
+              />
+              <SelectionBar listId={`search:${query()}`} songs={q.data!.song} />
+            </>
           </Show>
         </AsyncState>
       </Show>

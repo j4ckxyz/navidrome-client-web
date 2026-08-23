@@ -5,6 +5,7 @@ import {
   Calendar,
   Cast,
   Check,
+  ChevronDown,
   ChevronRight,
   Clapperboard,
   Clock,
@@ -94,6 +95,7 @@ export type IconName =
   | "tag"
   | "check"
   | "chevron-right"
+  | "chevron-down"
   | "share"
   | "link"
   | "download"
@@ -160,6 +162,7 @@ const LUCIDE_MAP: Record<IconName, LucideComp> = {
   tag: Tag,
   check: Check,
   "chevron-right": ChevronRight,
+  "chevron-down": ChevronDown,
   share: Share2,
   link: Link2,
   download: Download,

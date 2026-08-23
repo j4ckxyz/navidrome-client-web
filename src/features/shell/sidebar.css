@@ -183,3 +183,11 @@
   font-size: 13px;
   padding: 7px 9px;
 }
+
+/* A playlist accepting a dragged track. Needs to be unmistakable: the sidebar
+   is dense and the drop target is a thin row. */
+.sidebar-playlist-drop {
+  background: color-mix(in srgb, var(--accent) 26%, transparent) !important;
+  outline: 1px dashed var(--accent);
+  outline-offset: -2px;
+}

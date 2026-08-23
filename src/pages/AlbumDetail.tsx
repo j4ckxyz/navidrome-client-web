@@ -22,6 +22,7 @@ import { MenuButton } from "~/ui/Menu";
 import { SongList } from "~/ui/SongList";
 import { AsyncState } from "~/ui/AsyncState";
 import { formatCount, formatLongDuration } from "~/lib/format";
+import { SelectionBar } from "~/features/SelectionBar";
 import "./album.css";
 
 export default function AlbumDetail() {
@@ -165,7 +166,13 @@ export default function AlbumDetail() {
               <Show
                 when={multiDisc()}
                 fallback={
-                  <SongList songs={songs()} showHeader numbering="track" highlightId={highlightId()} />
+                  <SongList
+                    songs={songs()}
+                    showHeader
+                    numbering="track"
+                    highlightId={highlightId()}
+                    selectionId={`album:${params.id}`}
+                  />
                 }
               >
                 <For each={discs()}>
@@ -174,11 +181,22 @@ export default function AlbumDetail() {
                       <div class="disc-divider">
                         <Icon name="disc" size={14} /> Disc {group.disc}
                       </div>
-                      <SongList songs={group.songs} numbering="track" highlightId={highlightId()} />
+                      {/* Every disc shares the album's selection id, and is
+                          told where it sits in the full tracklist, so a
+                          shift-click range spans disc boundaries correctly. */}
+                      <SongList
+                        songs={group.songs}
+                        numbering="track"
+                        highlightId={highlightId()}
+                        selectionId={`album:${params.id}`}
+                        selectionContext={songs()}
+                        selectionOffset={songs().indexOf(group.songs[0])}
+                      />
                     </>
                   )}
                 </For>
               </Show>
+              <SelectionBar listId={`album:${params.id}`} songs={songs()} />
             </>
           )}
         </Show>

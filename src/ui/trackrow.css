@@ -178,3 +178,16 @@
   0%, 100% { background: transparent; }
   30% { background: color-mix(in oklab, var(--accent) 18%, transparent); }
 }
+
+/* Multi-selected row. Distinct from the "currently playing" accent so the two
+   can be true at once and still be told apart. */
+.track-row-selected {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.track-row-selected:hover {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+/* A drag-select shouldn't leave stray text highlighted across rows. */
+.tracklist {
+  user-select: none;
+}

@@ -5,10 +5,12 @@ import { queryClient } from "~/lib/query";
 import { ThemeProvider } from "~/theme/provider";
 import { initSession } from "~/auth/session";
 import { player } from "~/player/store";
+import { loadHistory } from "~/features/history/history";
 import { installMediaSession } from "~/player/mediaSession";
 import { installJellyfinSocket } from "~/player/jellyfinSocket";
 import { installJellyfinRemote } from "~/player/jellyfinRemote";
 import { installRemoteSessions } from "~/player/remoteSessions";
+import { installArtCacheBudget } from "~/lib/artCache";
 import { installListeners as installPwaListeners } from "~/lib/installPwa";
 import { desktopClasses, desktopPlatform, isTauriDesktop } from "~/lib/runtime";
 import { loadServerConfig } from "~/lib/serverConfig";
@@ -32,6 +34,7 @@ if (desktopPlatform) {
 // Restore a prior session and queue before first paint.
 initSession();
 player.restoreQueue();
+loadHistory();
 // Lock-screen / media-key transport controls.
 installMediaSession();
 // Remote control, both directions. All three are no-ops for Navidrome, whose
@@ -43,6 +46,9 @@ installMediaSession();
 installJellyfinRemote();
 installRemoteSessions();
 installJellyfinSocket();
+// Hand the artwork cache budget to the service worker, which does the eviction
+// but cannot read the setting itself.
+installArtCacheBudget();
 // Native shells neither need nor understand browser installation prompts.
 if (!isTauriDesktop) installPwaListeners();
 // Check if running with a backend proxy (non-blocking; sets proxyMode signal).

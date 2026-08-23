@@ -9,6 +9,7 @@ import { player } from "~/player/store";
 import { settings } from "~/settings/store";
 import { isStarred, toggleStar } from "~/features/stars";
 import { openAddToPlaylist } from "~/features/playlists/addToPlaylist";
+import { SONGS_MIME } from "~/features/playlists/dragToPlaylist";
 import { shareLink } from "~/features/share/share";
 import { openDownload } from "~/features/download/DownloadDialog";
 import { formatDuration, formatRelativeDate } from "~/lib/format";
@@ -30,6 +31,14 @@ export interface TrackRowProps {
   onRemoveFromPlaylist?: () => void;
   // Deep-linked track: draws attention with a brief highlight.
   highlighted?: boolean;
+  // Multi-select, when the row is rendered inside a SongList that supports it.
+  selected?: boolean;
+  // Returns true if the click was a selection gesture and was consumed.
+  onRowClick?: (event: MouseEvent) => boolean;
+  // Song ids to carry when this row is dragged onto a playlist. Omit to leave
+  // the row undraggable — the playlist page puts its own drag-to-reorder on a
+  // wrapper, and a draggable child would swallow it.
+  dragSongIds?: () => string[];
 }
 
 export function TrackRow(props: TrackRowProps) {
@@ -121,8 +130,20 @@ export function TrackRow(props: TrackRowProps) {
     <RowContextMenu items={actions()}>
       <div
         class="track-row"
-        classList={{ "track-row-current": isCurrent(), "track-row-highlight": props.highlighted }}
+        classList={{
+          "track-row-current": isCurrent(),
+          "track-row-highlight": props.highlighted,
+          "track-row-selected": props.selected,
+        }}
         data-song-id={props.song.id}
+        draggable={!!props.dragSongIds}
+        onDragStart={(e) => {
+          const ids = props.dragSongIds?.() ?? [];
+          if (ids.length === 0 || !e.dataTransfer) return;
+          e.dataTransfer.effectAllowed = "copy";
+          e.dataTransfer.setData(SONGS_MIME, JSON.stringify(ids));
+        }}
+        onClick={(e) => props.onRowClick?.(e)}
         onDblClick={play}
       >
         <div class="track-index">

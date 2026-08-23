@@ -339,11 +339,14 @@ export default function Settings() {
                   onChange={(v) => updateSettings((s) => (s.power.coverArtCacheMB = v))}
                 />
               </Row>
-              <Row label="Now-playing poll interval" hint="How often live playback state refreshes">
+              <Row
+                label="Other devices refresh rate"
+                hint="How quickly another device's track, position and volume update here"
+              >
                 <RangeField
                   value={settings.power.polling.nowPlayingMs / 1000}
                   min={1}
-                  max={30}
+                  max={15}
                   suffix="s"
                   onChange={(v) => updateSettings((s) => (s.power.polling.nowPlayingMs = v * 1000))}
                 />

@@ -110,7 +110,13 @@ async function main(): Promise<void> {
     "SessionsStart",
   );
   const start = jf.socketMessages.find((m) => m.MessageType === "SessionsStart");
-  eq("SessionsStart subscribes with a push interval", start?.Data, "0,1500");
+  // The interval comes from the "Other devices refresh rate" setting.
+  const { settings } = await import("~/settings/store");
+  eq(
+    "SessionsStart subscribes at the configured refresh rate",
+    start?.Data,
+    `0,${settings.power.polling.nowPlayingMs}`,
+  );
 
   // --- 2. Device discovery ---------------------------------------------------
   console.log("\n2. Device discovery and filtering");
@@ -290,7 +296,9 @@ async function main(): Promise<void> {
 
   // --- 7. Local queue is untouched ------------------------------------------
   console.log("\n7. The local queue survives");
-  const stored = JSON.parse(localStorage.getItem("nd:queue") ?? "{}");
+  // The queue is namespaced per server now, so a switch can't restore another
+  // server's track ids.
+  const stored = JSON.parse(localStorage.getItem(`nd:queue:${jf.url}`) ?? "{}");
   eq("remote queue never overwrote the persisted local queue",
      (stored.queue ?? []).map((s: { id: string }) => s.id), ["local-a", "local-b"]);
 

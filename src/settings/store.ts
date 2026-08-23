@@ -3,6 +3,7 @@
 // never included) and reset-to-defaults.
 
 import { createStore, produce, reconcile } from "solid-js/store";
+import { log } from "~/lib/log";
 import {
   DEFAULT_SETTINGS,
   SETTINGS_VERSION,
@@ -56,7 +57,7 @@ function persist(): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   } catch (e) {
-    console.error("Failed to persist settings", e);
+    log.error("settings", "failed to persist", e);
   }
 }
 

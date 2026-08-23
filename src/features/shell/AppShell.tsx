@@ -2,7 +2,7 @@
 // bar, optional queue/lyrics side panel, and the persistent now-playing bar.
 // Also installs global keyboard shortcuts and the add-to-playlist dialog.
 
-import { createEffect, createSignal, type JSX, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createSignal, ErrorBoundary, onCleanup, onMount, Show, type JSX } from "solid-js";
 import { useLocation, useNavigate } from "@solidjs/router";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
@@ -27,6 +27,8 @@ import { checkForDesktopUpdate } from "~/lib/desktopUpdater";
 import { UploadDialog } from "~/features/upload/UploadDialog";
 import { Icon } from "~/ui/Icon";
 import { settings, updateSettings } from "~/settings/store";
+import { ErrorState } from "~/ui/ErrorState";
+import { CommandPalette } from "./CommandPalette";
 import { installShortcuts } from "./shortcuts";
 import "./shell.css";
 
@@ -93,13 +95,20 @@ export function AppShell(props: { children?: JSX.Element }) {
           <Icon name="chevron-right" size={15} />
         </span>
       </button>
+      <CommandPalette />
       <main class="app-content">
         <TopBar />
         <div class="app-scroll">
           {/* Re-key on the path (not the query) so each navigation replays a
               quiet entrance, but in-page changes like ?sort= don't. */}
           <Show when={location.pathname} keyed>
-            <div class="route-view">{props.children}</div>
+            <div class="route-view">
+              {/* Inner boundary: a page that throws must not take the sidebar
+                  and now-playing bar down with it — playback keeps going. */}
+              <ErrorBoundary fallback={(err, reset) => <ErrorState error={err} reset={reset} />}>
+                {props.children}
+              </ErrorBoundary>
+            </div>
           </Show>
         </div>
       </main>

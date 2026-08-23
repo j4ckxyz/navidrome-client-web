@@ -11,6 +11,7 @@ import { ArtistCard } from "~/ui/ArtistCard";
 import { SongList } from "~/ui/SongList";
 import { AsyncState } from "~/ui/AsyncState";
 import { Icon } from "~/ui/Icon";
+import { SelectionBar } from "~/features/SelectionBar";
 
 export default function Favourites() {
   const q = createQuery(() => ({
@@ -60,7 +61,17 @@ export default function Favourites() {
               <Icon name="play" size={16} /> Play all
             </button>
           </div>
-          <SongList songs={q.data!.song} showCover showAlbum showHeader numbering="index" />
+          <>
+            <SongList
+              songs={q.data!.song}
+              showCover
+              showAlbum
+              showHeader
+              numbering="index"
+              selectionId="favourites"
+            />
+            <SelectionBar listId="favourites" songs={q.data!.song} />
+          </>
         </Show>
       </AsyncState>
     </div>

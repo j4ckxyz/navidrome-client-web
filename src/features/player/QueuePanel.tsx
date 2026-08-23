@@ -1,7 +1,7 @@
-// Side panel showing the play queue. Shows the current track and everything
-// after it (already-played tracks are hidden); supports drag-to-reorder (HTML5
-// DnD) and per-item removal. When autoplay is on, a preview of the similar
-// tracks that will play after the queue is shown beneath it.
+// Side panel showing the play queue: what's played, what's playing, and what's
+// next. Supports drag-to-reorder (HTML5 DnD) and per-item removal. When autoplay
+// is on, a preview of the similar tracks that will play after the queue is shown
+// beneath it.
 //
 // Queue order is client session state; it persists locally so playback can
 // resume, but durable library state stays on the server.
@@ -21,10 +21,22 @@ import "./queuepanel.css";
 export function QueuePanel() {
   const [dragIndex, setDragIndex] = createSignal<number | null>(null);
   const [overIndex, setOverIndex] = createSignal<number | null>(null);
+  // The currently-playing row, so it can be scrolled back into view after
+  // you've scrolled off down a long queue.
+  let currentRow: HTMLDivElement | undefined;
 
-  // Hide already-played tracks: render from the current track onward.
+  function jumpToCurrent(): void {
+    currentRow?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  // History is collapsed by default — the panel's job is what's coming — but
+  // "what was that two songs ago?" needs an answer, and before this the played
+  // tracks were simply unreachable.
+  const [showHistory, setShowHistory] = createSignal(false);
+
   const start = createMemo(() => (player.state.index >= 0 ? player.state.index : 0));
   const upcoming = createMemo(() => player.state.queue.slice(start()));
+  const played = createMemo(() => player.state.queue.slice(0, start()));
 
   function onDrop(target: number) {
     const from = dragIndex();
@@ -63,9 +75,20 @@ export function QueuePanel() {
           </Show>
         </h2>
         <Show when={player.state.queue.length > 0}>
-          <button class="btn btn-ghost queue-clear" onClick={() => player.clearQueue()}>
-            Clear
-          </button>
+          <div class="queue-head-actions">
+            <Show when={player.state.index >= 0}>
+              <button
+                class="btn btn-ghost queue-clear"
+                onClick={jumpToCurrent}
+                title="Scroll to the track that's playing"
+              >
+                Jump to current
+              </button>
+            </Show>
+            <button class="btn btn-ghost queue-clear" onClick={() => player.clearQueue()}>
+              Clear
+            </button>
+          </div>
         </Show>
       </div>
 
@@ -79,11 +102,46 @@ export function QueuePanel() {
         }
       >
         <div class="queue-list">
+          <Show when={played().length > 0}>
+            <button
+              class="queue-history-toggle"
+              onClick={() => setShowHistory((v) => !v)}
+              aria-expanded={showHistory()}
+            >
+              <Icon name={showHistory() ? "chevron-down" : "chevron-right"} size={14} />
+              <span>
+                {showHistory() ? "Hide" : "Show"} {played().length} played
+              </span>
+            </button>
+            <Show when={showHistory()}>
+              <For each={played()}>
+                {(song, i) => (
+                  <div
+                    class="queue-item queue-item-played"
+                    onDblClick={() => player.playNow(player.state.queue, i())}
+                  >
+                    <span class="queue-grip queue-played-index" aria-hidden="true">
+                      {i() + 1}
+                    </span>
+                    <CoverArt coverArt={song.coverArt} size={38} alt="" class="queue-cover" />
+                    <div class="queue-meta">
+                      <span class="queue-title">{song.title}</span>
+                      <span class="queue-artist muted">{song.artist}</span>
+                    </div>
+                    <span class="queue-dur muted">{formatDuration(song.duration)}</span>
+                  </div>
+                )}
+              </For>
+            </Show>
+          </Show>
           <For each={upcoming()}>
             {(song, i) => {
               const real = () => start() + i();
               return (
                 <div
+                  ref={(el) => {
+                    if (real() === player.state.index) currentRow = el;
+                  }}
                   class="queue-item"
                   classList={{
                     "queue-item-current": real() === player.state.index,
