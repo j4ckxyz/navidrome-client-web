@@ -26,3 +26,24 @@
   font-weight: 600;
   font-size: 20px !important;
 }
+
+/* Credit for lyrics that came from LRCLIB rather than your own server. Naming
+   the matched track matters: when the timings drift it's usually because the
+   database matched a different release, and this is what makes that visible. */
+.lyrics-credit {
+  font-size: 11.5px;
+  line-height: 1.4;
+  padding: 0 0 10px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.lyrics-credit em {
+  font-style: normal;
+  color: var(--content-text);
+}
+.lyrics-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 34ch;
+  margin-top: 6px;
+}

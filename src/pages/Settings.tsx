@@ -200,6 +200,16 @@ export default function Settings() {
                   onChange={(v) => updateSettings((s) => (s.playback.autoplay = v))}
                 />
               </Row>
+              <Row
+                label="Look up lyrics online"
+                hint="When your server has none, fetch them from LRCLIB — the only request this app makes to anything other than your own server"
+              >
+                <Toggle
+                  label="Look up lyrics online"
+                  checked={settings.playback.onlineLyrics}
+                  onChange={(v) => updateSettings((s) => (s.playback.onlineLyrics = v))}
+                />
+              </Row>
               <Row label="Forgotten Gems" hint="Bias radio and discovery toward tracks you've barely played">
                 <Toggle
                   label="Forgotten Gems"

@@ -16,7 +16,7 @@ There is **no database**, and in its simplest form **no backend** — the app is
 - **Favourites / stars** with instant feedback, synced to the server.
 - **Persistent now-playing bar** with full transport, a live seek bar, queue, and volume.
 - **Queue** side panel with drag-to-reorder.
-- **Lyrics** side panel, with synced (time-aligned) highlighting when your server provides it.
+- **Lyrics** side panel, with synced (time-aligned) highlighting. Your server is asked first; if it has none — which is most self-hosted libraries, since few files carry lyrics tags — you can opt in to fetching them from [LRCLIB](https://lrclib.net), a free, open, no-account database of ~3M tracks with time-synced words. Off by default: it's the only request the app makes to anything other than your own server, and it sends just the artist, title, album and length of what's playing.
 - **Album & artist pages** with metadata, cover art, biographies, and similar artists.
 - **Gapless-ish playback, crossfade, and ReplayGain normalization** via the Web Audio API.
 - **Keyboard shortcuts** for playback and navigation — fully rebindable.

@@ -217,6 +217,10 @@ export interface Settings {
     // Forgotten Gems: bias radio/discovery suggestions toward tracks you've
     // barely played. See applyDiscoveryFilters in lib/recommendations.
     forgottenGems: boolean;
+    // Look up missing lyrics on LRCLIB. Off by default: it is the only request
+    // this app makes to anything other than your own server, so it's a choice
+    // rather than a default. See features/lyrics/lrclib.
+    onlineLyrics: boolean;
   };
 
   power: {
@@ -598,6 +602,7 @@ export const DEFAULT_SETTINGS: Settings = {
     },
     autoplay: true,
     forgottenGems: false,
+    onlineLyrics: false,
   },
   power: {
     shortcuts: { ...DEFAULT_SHORTCUTS },
