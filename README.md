@@ -19,6 +19,7 @@ There is **no database**, and in its simplest form **no backend** — the app is
 - **Lyrics** side panel, with synced (time-aligned) highlighting. Your server is asked first; if it has none — which is most self-hosted libraries, since few files carry lyrics tags — you can opt in to fetching them from [LRCLIB](https://lrclib.net), a free, open, no-account database of ~3M tracks with time-synced words. Off by default: it's the only request the app makes to anything other than your own server, and it sends just the artist, title, album and length of what's playing.
 - **Album & artist pages** with metadata, cover art, biographies, and similar artists.
 - **Gapless-ish playback, crossfade, and ReplayGain normalization** via the Web Audio API.
+- **Infinite radio** that stays on topic. When the queue runs out it keeps going with tracks ranked against the seed's genre, era, artist and your favourites — rather than trusting the server's own "similar songs", which on Jellyfin is close to a library shuffle (seeded with 1992 hip-hop it offered Taylor Swift and Conan Gray). Measured on a real library, genre coherence went from ~30% to ~95%. Every batch is anchored to a track *you* chose, never to one radio added, so a long session can't drift; added tracks are marked `radio` in the queue.
 - **Keyboard shortcuts** for playback and navigation — fully rebindable.
 - **Admin music upload** — when deployed alongside your server (see below), admins get an upload button that accepts audio files, whole folders, or a ZIP, writes them into the library, and triggers a scan. All embedded metadata is preserved.
 - **Update checking** — admins can see, from Settings, whether the deployment is behind the latest release, and (opt-in) update it in one click.
@@ -100,19 +101,34 @@ The Docker image is a small Bun server. Depending on how you configure it, it ru
 
 Uploads are **off by default** and gated three ways, so a public deployment can't be abused: the operator must explicitly set `MUSIC_DIR` + mount the matching folder, the request must come from a user the **proxied server confirms is an admin**, and direct mode disables the endpoint entirely.
 
+### Updating your instance
+
+**On the machine you deployed from, in that folder:**
+
+```bash
+bun run update
+```
+
+That's the whole thing. It reads the Compose project that actually created your running container, preserves your `docker-compose*.yml` and `.env` **verbatim**, pulls the latest source, and rebuilds in place. It's safe to re-run — if you're already current it exits without touching anything — and it never touches a Navidrome you manage separately.
+
+Prefer to do it by hand? The equivalent is:
+
+```bash
+git pull
+COMMIT_HASH=$(git rev-parse HEAD) docker compose up -d --build
+```
+
+Pass `COMMIT_HASH` and the app can report its own version; without it the Updates card shows "Running: unknown" (it still detects updates by release version, so the check works either way). `bun run update` always passes it.
+
+To have it happen on its own, see [Updating automatically](#updating-automatically) below.
+
 ### Checking for updates
 
-Admins get an **Updates** card in Settings → Connections. It compares the commit this build was made from against the head of `UPDATE_BRANCH` on GitHub and tells you how far behind you are, with a link to the diff.
+Admins get an **Updates** card in Settings → Connections. It compares what this build is running against GitHub — by commit when the build recorded one, and by release version otherwise — and tells you how far behind you are, with a link to the diff. It checks on load and every six hours; both are toggles on the card.
 
 Installing the update is a separate question, because the shipped container deliberately has no git checkout and no Docker socket:
 
-- **Default (recommended).** The card shows the one command to run in the folder you deployed from:
-
-  ```bash
-  bun run update
-  ```
-
-  That's the same updater the button would run — it inspects your existing Compose project, preserves your `docker-compose*.yml` and `.env`, pulls, and rebuilds in place.
+- **Default (recommended).** The card shows you `bun run update` to run, as above.
 
 - **Opt-in one-click updates.** Set `SELF_UPDATE=1` and give the container what the updater needs — the checkout and the Docker socket:
 

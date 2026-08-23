@@ -11,7 +11,7 @@ import { client } from "~/auth/session";
 import { settings } from "~/settings/store";
 import { proxyMode } from "~/lib/serverConfig";
 import { canPlayContainer } from "~/lib/codecs";
-import { nextRadioBatch } from "~/lib/recommendations";
+import { buildRadioBatch } from "~/lib/radio";
 import { loadHistory, recentlyPlayedIds, recordPlay } from "~/features/history/history";
 import { AudioEngine, type DeckTrack } from "./engine";
 import { socketClient } from "./jellyfinSocket";
@@ -798,11 +798,15 @@ function createPlayer() {
     if (!c) return 0;
     radioFetching = true;
     try {
-      // Over-fetch so there's room to discard tracks already queued or recently
-      // played and still end up with `count` of them.
-      const similar = await c.getSimilarSongs(seedId, count * 3);
-      const fresh = nextRadioBatch(state.queue, similar, recentlyPlayedIds())
-        .slice(0, count)
+      // Rank a wide pool from several sources rather than trusting the
+      // server's own mix, which on Jellyfin is close to a library shuffle.
+      const exclude = new Set([...state.queue.map((s) => s.id), ...recentlyPlayedIds()]);
+      const seedSong = state.queue.find((s) => s.id === seedId) ?? current();
+      const picked = seedSong
+        ? await buildRadioBatch(c, seedSong, count, exclude)
+        : [];
+      const fresh = picked
+        .filter((s) => !state.queue.some((q) => q.id === s.id))
         // Marked so they never seed the next batch, and so the queue panel can
         // show which tracks the user didn't pick.
         .map((song) => ({ ...song, autoQueued: true }));

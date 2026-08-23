@@ -78,6 +78,55 @@ const allAuto = [
 ] as unknown as { id: string; autoQueued?: boolean }[];
 check("falls back rather than returning nothing", !!radioSeed(allAuto, 1));
 
+console.log("\n5. Ranking picks genre-coherent tracks");
+const { rankRadioCandidates, scoreCandidate } = await import("~/lib/recommendations");
+const fixed = { jitter: () => 0 };
+const seedTrack = song("seed", { genre: "Rock", year: 1993, artist: "Radiohead", albumId: "alb1" });
+const pool = [
+  song("rock1", { genre: "Rock", year: 1995, artist: "Queen" }),
+  song("rock2", { genre: "Rock", year: 1999, artist: "Foo Fighters" }),
+  song("pop1",  { genre: "Pop", year: 2021, artist: "Someone" }),
+  song("pop2",  { genre: "Pop", year: 2019, artist: "Another" }),
+] as never[];
+eq(
+  "genre match beats a genre mismatch",
+  ids(rankRadioCandidates(seedTrack, pool, 2, fixed)),
+  ["rock1", "rock2"],
+);
+check(
+  "a same-album track scores below a same-genre one by another artist",
+  scoreCandidate(seedTrack, song("x", { genre: "Rock", year: 1993, artist: "Radiohead", albumId: "alb1" }), fixed) <
+    scoreCandidate(seedTrack, song("y", { genre: "Rock", year: 1995, artist: "Queen" }), fixed),
+);
+check(
+  "the seed itself is never returned",
+  !ids(rankRadioCandidates(seedTrack, [seedTrack, ...pool] as never[], 4, fixed)).includes("seed"),
+);
+
+console.log("\n6. One artist cannot take over the batch");
+// The regression this pins: a single pass plus an uncapped backfill gave the
+// dominant artist the whole rest of the batch. Measured on a real library that
+// produced eight consecutive tracks by the same act despite a cap of 2.
+const dominated = [
+  ...Array.from({ length: 10 }, (_, i) => song(`dom${i}`, { genre: "Rock", artist: "Dominant" })),
+  song("other1", { genre: "Rock", artist: "Other A" }),
+  song("other2", { genre: "Rock", artist: "Other B" }),
+] as never[];
+const picked = rankRadioCandidates(seedTrack, dominated, 8, { ...fixed, maxPerArtist: 2 });
+const byArtist = new Map<string, number>();
+for (const s of picked as { artist: string }[]) byArtist.set(s.artist, (byArtist.get(s.artist) ?? 0) + 1);
+eq("the batch is still filled", picked.length, 8);
+check(
+  "the dominant artist is spread, not stacked",
+  (byArtist.get("Dominant") ?? 0) <= 6,
+  Object.fromEntries(byArtist),
+);
+check("the other artists are used first", (byArtist.get("Other A") ?? 0) === 1 && (byArtist.get("Other B") ?? 0) === 1);
+
+console.log("\n7. A pool smaller than the batch doesn't loop");
+const tiny = [song("t1", { genre: "Rock", artist: "Solo" })] as never[];
+eq("returns what exists", rankRadioCandidates(seedTrack, tiny, 8, fixed).length, 1);
+
 console.log(`\n${failures.length === 0 ? "PASS" : "FAIL"} — ${passed} checks passed, ${failures.length} failed`);
 for (const f of failures) console.log(`  · ${f}`);
 process.exit(failures.length ? 1 : 0);
